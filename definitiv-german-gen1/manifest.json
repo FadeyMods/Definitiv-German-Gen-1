@@ -1,0 +1,58 @@
+{
+  "id": "definitiv-german-gen1",
+  "name": "📀🇩🇪 Definitiv German 💬✅ Gen 1",
+  "version": "1.0.0",
+  "api": 2,
+  "entry": "main.lua",
+  "profile": "content",
+  "permissions": [
+    "engine_internals"
+  ],
+  "category": "Translation",
+  "game_version": ">=0.0.0-0 <2.0.0",
+  "priority": 50,
+  "games": [
+    "red",
+    "blue",
+    "yellow"
+  ],
+  "optional_imports": [
+    {
+      "id": "rot_de",
+      "name": "Pokémon Rote Edition (deutsch)",
+      "description": "Nur für Rote Edition nötig. Deine deutsche ROM: Pokemon - Rote Edition (Germany) (SGB Enhanced).gb",
+      "file": "rot_de.gb",
+      "md5": [
+        "8ed0e8d45a81ca34de625d930148a512"
+      ],
+      "size": 1048576
+    },
+    {
+      "id": "blau_de",
+      "name": "Pokémon Blaue Edition (deutsch)",
+      "description": "Nur für Blaue Edition nötig. Deine deutsche ROM: Pokemon - Blaue Edition (Germany) (SGB Enhanced).gb",
+      "file": "blau_de.gb",
+      "md5": [
+        "a1ec7f07c7b4251d5fafc50622d546f8"
+      ],
+      "size": 1048576
+    },
+    {
+      "id": "gelb_de",
+      "name": "Pokémon Gelbe Edition (deutsch)",
+      "description": "Nur für Gelbe Edition nötig. Deine deutsche ROM: Pokemon - Gelbe Edition - Special Pikachu Edition (Germany) (CGB+SGB Enhanced).gb",
+      "file": "gelb_de.gb",
+      "md5": [
+        "e93f10168e3c9b9d18e3ad4a1415e1d0"
+      ],
+      "size": 1048576
+    }
+  ],
+  "github": "FadeyMods/Definitiv-German-Gen-1",
+  "dependencies": [],
+  "optional_dependencies": [],
+  "conflicts": [
+    "deutsch-gen1"
+  ],
+  "description": "Macht Rot, Blau und Gelb komplett deutsch – Texte, Namen, Schrift und Grafiken werden beim Start aus DEINEN deutschen ROMs gelesen. Der Mod selbst enthält keine ROM-Inhalte."
+}
