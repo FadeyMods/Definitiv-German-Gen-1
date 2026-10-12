@@ -49,6 +49,10 @@ return {
     dex = 69672,
     tb = 69160,
   },
+  fontTiles = { {
+    off = 67424,
+    tile = 44,
+  } },
   gfx = { {
     bpp = 2,
     h = 8,

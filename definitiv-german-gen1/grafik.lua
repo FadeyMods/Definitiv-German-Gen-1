@@ -115,6 +115,29 @@ return function(W)
     if not ok then log:warn("Deutsch Gen 1: Schrift: %s", tostring(e)) end
   end
 
+  -- Grundschrift: Buchstaben, die die DE-ROM anders zeichnet (z. B. "m"), in die Schriftseite des Ports setzen.
+  -- Grundlage ist die vom Port erzeugte Seite; nur die genannten Kacheln kommen aus der DE-ROM.
+  if R.fontTiles and #R.fontTiles > 0 then
+    local path = "assets/generated/fonts/font.png"
+    local ok, quelle = pcall(Assets.resolve, path)
+    if ok and quelle then
+      compose(path, function()
+        local img = love.image.newImageData(quelle)
+        for _, k in ipairs(R.fontTiles) do
+          local tx, ty = (k.tile % 16) * 8, floor(k.tile / 16) * 8
+          for y = 0, 7 do
+            local row = byte(rom, k.off + y + 1)
+            for x = 0, 7 do
+              local an = bit(row, 7 - x) == 1
+              img:setPixel(tx + x, ty + y, 0, 0, 0, an and 1 or 0)
+            end
+          end
+        end
+        return img
+      end)
+    end
+  end
+
   -- Pokedex-Einheiten m / k / g (DE-Kacheln $60-$62)
   if R.dexUnits then
     local path = "definitiv-german-gen1/dex_einheiten_" .. ver .. ".png"

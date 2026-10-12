@@ -4,6 +4,12 @@ Komplett deutsche Rote, Blaue und Gelbe Edition für [gen1recomp](https://github
 
 *A full German translation mod for gen1recomp (Red, Blue, Yellow). It reads everything from your own German ROMs.*
 
+## Neu in Version 1.0.1
+
+Alles verglichen mit den deutschen Originalen im Emulator, vom Einschalten bis ins Spiel:
+
+- Kleines „m“ jetzt in der Form der deutschen Spiele (schmaler als im Englischen)
+
 ## Neustart: Version 1.0.0
 
 Das Projekt wurde komplett neu aufgebaut. Der Mod hat dafür eine **neue ID** (`definitiv-german-gen1`) und beginnt wieder bei **Version 1.0.0**.
@@ -25,7 +31,7 @@ Beim Start liest er deine eigene deutsche ROM und baut daraus alles zusammen.
 
 ## Voraussetzungen
 
-- gen1recomp **0.3.74** oder neuer, mit importierter englischer ROM wie gewohnt
+- gen1recomp **0.3.74** oder neuer (getestet mit 0.3.80), mit importierter englischer ROM wie gewohnt
 - Deine **deutsche ROM** der Edition, die du spielen willst (jede Edition braucht nur ihre eigene):
 
 | Edition | MD5 |
@@ -36,7 +42,7 @@ Beim Start liest er deine eigene deutsche ROM und baut daraus alles zusammen.
 
 ## Installation
 
-1. Im Launcher unter **MODS** den Mod suchen und installieren – oder `definitiv-german-gen1-1.0.0.zip` aus den Releases über **Import mod .zip** einspielen.
+1. Im Launcher unter **MODS** den Mod suchen und installieren – oder `definitiv-german-gen1-1.0.1.zip` aus den Releases über **Import mod .zip** einspielen.
 2. In den **Details** des Mods die deutsche(n) ROM(s) auswählen. Der Launcher prüft sie und legt sie beim Mod ab.
 3. Mod aktivieren und spielen.
 
