@@ -1,6 +1,16 @@
 -- Rezept blue (dialoge): nur ROM-Adressen der deutschen blue-ROM und Engine-Platzhalter, keine ROM-Inhalte
 return {
   text = {
+    YouWinText = { { 79961, 8 } },
+    YouLoseText = { { 79970, 8 } },
+    DrawText = { { 79979, 13 } },
+    ["TradeCenter_SelectMon.statsTrade"] = { { 22319, 16 } },
+    TradeCompleted = { { 23101, 17 } },
+    TradeCanceled = { { 23119, 18 }, "\n", { 23138, 18 } },
+    ["TwoOptionMenuStrings.TradeCancelMenu"] = { { 30378, 6 }, "\n", { 30385, 6 } },
+    CancelTextString = { { 22481, 9 } },
+    WaitingText = { { 19492, 13 } },
+    ["ItemUseMedicine.emptyPartyText"] = { { 56042, 15 }, "\n", { 56058, 11 }, "{PROMPT}" },
     ["DisplayBattleMenu.oldManName"] = { { 249618, 5 } },
     SSAnneKitchenCook7EelsAuBarbecueText = { { 530441, 11 }, "\f", { 530453, 14 }, "\n", { 530468, 16 }, "\v", { 530485, 16 }, "{DONE}" },
     SSAnneKitchenCook7PrimeBeefSteakText = { { 530503, 15 }, "\f", { 530519, 16 }, "\n", { 530536, 10 }, "{DONE}" },
@@ -489,7 +499,7 @@ return {
     _EnemyAppearedText = { "{RAM:wEnemyMonNick}\n", { 565698, 11 }, "{PROMPT}" },
     _EnemyMonFaintedText = { "{RAM:wEnemyMonNick}\n", { 544934, 14 }, "{PROMPT}" },
     _EnemyRanText = { "{RAM:wEnemyMonNick}\n", { 537665, 15 }, "{PROMPT}" },
-    _EnemysWeakText = { { 565849, 16 }, "\n", { 565866, 5 }, "{DONE}" },
+    _EnemysWeakText = { { 565849, 16 }, "\n", { 565866, 5 }, "{RAM:wBattleMonNick}!{DONE}" },
     _EnoughText = { { 565888, 6 }, "{DONE}" },
     _EvadedAttackText = { "{TARGET}\n", { 609205, 16 }, "{PROMPT}" },
     _EvolvedText = { "{RAM:wStringBuffer}", { 608432, 6 }, "{DONE}" },

@@ -108,6 +108,65 @@ return function(mod)
   end)
 
   -- ------------------------------------------------------------ Bausteine
+  -- ------------------------------------------------------------ Pruefsummen statt Spieltext
+  -- Der Mod enthaelt keine englischen Spieltexte, auch nicht als Suchschluessel.  Rezepte und Kataloge
+  -- fuehren Texte des Ports als Pruefsumme "~" .. FNV-1a-32 (8 Hex) .. Laenge (4 Hex); hier wird die
+  -- Pruefsumme des englischen Port-Texts zur Laufzeit gebildet.  Gegenstueck fuer die Werkzeuge:
+  -- Test/werkzeug/pruefsumme.py (muss dieselben Werte liefern).
+  local bxor, sbyte, sformat = bit.bxor, string.byte, string.format
+  local summen = {}
+  W.pruefsumme = function(s)
+    local h = summen[s]
+    if h then return h end
+    local x = 2166136261
+    for i = 1, #s do
+      x = bxor(x, sbyte(s, i)) % 4294967296
+      x = (x * 403 + (x % 256) * 16777216) % 4294967296
+    end
+    h = sformat("~%08x%04x", x, #s % 65536)
+    summen[s] = h
+    return h
+  end
+  -- tab[text] ueber die Pruefsumme (Klartext-Schluessel bleiben moeglich: Port-Bezeichner, Labels)
+  W.nachText = function(tab, s)
+    if type(tab) ~= "table" or type(s) ~= "string" then return nil end
+    local v = tab[s]
+    if v == nil then v = tab[W.pruefsumme(s)] end
+    return v
+  end
+  -- Uebersetzungs-Katalog des Ports (src/core/Strings.lua liest catalog[quelle]) und data.text: Eintraege
+  -- stehen unter der Pruefsumme; ein __index findet sie ueber den englischen Text (auch "kontext|quelle").
+  W.katalogMitPruefsummen = function()
+    pcall(function()
+      local Strings = require("src.core.Strings")
+      if Strings._deutschLoad then return end
+      Strings._deutschLoad = Strings.load
+      -- data.strings (Katalog) und data.text (Gen 1: Klartext-Saetze der Port-Skripte, show_text sucht sie
+      -- dort) bekommen denselben Pruefsummen-Zugriff; beide sind nach dem Zusammenfuehren der Mods fertig
+      local function mitPruefsummen(t)
+        if type(t) ~= "table" or getmetatable(t) then return end
+        -- Treffer werden in einer eigenen Tabelle gemerkt, nicht in t (der Port durchlaeuft t mit pairs)
+        local fehlt, gefunden = {}, {}
+        setmetatable(t, { __index = function(tab, k)
+          if type(k) ~= "string" or fehlt[k] or k:sub(1, 1) == "~" then return nil end
+          local v = gefunden[k]
+          if v ~= nil then return v end
+          v = rawget(tab, W.pruefsumme(k))
+          if v == nil then fehlt[k] = true else gefunden[k] = v end
+          return v
+        end })
+      end
+      Strings.load = function(data, ...)
+        if type(data) == "table" then
+          mitPruefsummen(data.strings)
+          mitPruefsummen(data.text)
+        end
+        return Strings._deutschLoad(data, ...)
+      end
+    end)
+  end
+  W.katalogMitPruefsummen()
+
   W.baustein = function(name)
     W.ladeRezept(name)
     local src = mod:read(name .. ".lua")
@@ -126,7 +185,6 @@ return function(mod)
         failed[section] or 0, firstErr[section] and (" (z.B. " .. firstErr[section] .. ")") or "")
     end
   end
-  W.zaehler = function() return counts, failed, firstErr end
 
   return W
 end

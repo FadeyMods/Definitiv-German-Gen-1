@@ -17,7 +17,8 @@ return function(W)
       mod.hooks:wrap(hook, function(nxt, game, items)
         local out = nxt(game, items)
         for _, it in ipairs(out or {}) do
-          if m[it.label] then it.label = m[it.label] end
+          local de = W.nachText(m, it.label)
+          if de then it.label = de end
         end
         return out
       end)
@@ -34,7 +35,8 @@ return function(W)
     W.menuHaken[#W.menuHaken + 1] = function(items)
       if type(items) ~= "table" then return end
       for _, it in ipairs(items) do
-        if type(it) == "table" and type(it.label) == "string" and m[it.label] then it.label = m[it.label] end
+        local de = type(it) == "table" and W.nachText(m, it.label)
+        if de then it.label = de end
       end
     end
   end
@@ -152,12 +154,13 @@ return function(W)
   pcall(function()
     local SM = require("src.ui.SlotMachine")
     local TB = require("src.render.TextBox")
+    -- Pruefsummen der englischen Port-Zeilen (Zeile 1, Zeile 2) -> DE-Label
     local MAP = {
-      { "Bet how many", "coins?", "_BetHowManySlotMachineText" },
-      { "One more", "go?", "_OneMoreGoSlotMachineText" },
-      { "Yeah!", nil, "_YeahText" },
-      { "Start!", nil, "_StartSlotMachineText" },
-      { "Not this time!", nil, "_NotThisTimeText" },
+      { "~88dd0a39000c", "~c2ae05960006", "_BetHowManySlotMachineText" },
+      { "~d868d5980008", "~8d1c0b9c0003", "_OneMoreGoSlotMachineText" },
+      { "~1d529ff10005", nil, "_YeahText" },
+      { "~8946befa0006", nil, "_StartSlotMachineText" },
+      { "~66be2676000e", nil, "_NotThisTimeText" },
     }
     SM._deutschBottom = SM._deutschBottom or SM.drawBottom
     SM.drawBottom = function(self, ...)
@@ -176,7 +179,7 @@ return function(W)
         end
       end
       return remapped({
-        text = function(t, x, y) return x, y, repl[t] end,
+        text = function(t, x, y) return x, y, type(t) == "string" and repl[W.pruefsumme(t)] or nil end,
       }, SM._deutschBottom, self, ...)
     end
   end)

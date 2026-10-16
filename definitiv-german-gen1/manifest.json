@@ -1,7 +1,7 @@
 {
   "id": "definitiv-german-gen1",
-  "name": "📀🇩🇪 Definitiv German 💬✅ Gen 1",
-  "version": "1.0.1",
+  "name": "Definitiv German Gen 1",
+  "version": "1.0.2",
   "api": 2,
   "entry": "main.lua",
   "profile": "content",

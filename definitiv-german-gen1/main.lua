@@ -1,9 +1,9 @@
--- 📀🇩🇪 Definitiv German 💬✅ Gen 1  (Rot, Blau, Gelb)
+-- Definitiv German Gen 1  (Rot, Blau, Gelb)
 --
--- Dieser Mod enthaelt KEINE Texte oder Grafiken der Spiele.  Er bringt nur Rezepte mit
--- (Adressen in der deutschen ROM) und liest beim Start die deutsche ROM der laufenden Edition,
--- die du im Launcher importiert hast -- immer genau das Gegenstueck:
---   Rot -> Rote Edition, Blau -> Blaue Edition, Gelb -> Gelbe Edition.
+-- Dieser Mod enthaelt KEINE Texte oder Grafiken der Spiele, auch keine englischen Texte als Suchschluessel.
+-- Er bringt nur Rezepte mit (Adressen in der deutschen ROM; Texte des Ports nur als Pruefsumme, siehe
+-- werkzeug.lua) und liest beim Start die deutsche ROM der laufenden Edition, die du im Launcher importiert
+-- hast -- immer genau das Gegenstueck.
 --
 -- Aufbau (jeder Baustein hat sein eigenes Rezept rezept_<edition>_<baustein>.lua):
 --   werkzeug.lua    Edition, deutsche ROM, Rezepte, gemeinsame Helfer
@@ -13,6 +13,9 @@
 --   port_texte.lua  feste Texte des Ports (mod.content.strings) und Menues
 --   grafik.lua      Bilder, Schrift, Titelbild         (Assets.compose)
 --   layout.lua      Kaesten und Positionen wie in der DE-ROM
+--   port_extras.lua Port-Zusaetze ohne ROM-Gegenstueck (MODS-Verwaltung, Link-Menue, Steuerung, Farben, Optionen,
+--                   CHEF-Bonuskampf)
+--   port_extras_daten.lua  deutsche Texte dazu, ERZEUGT von Test/werkzeug/port_extras_quelle.py
 return function(mod)
   local quelle = mod:read("werkzeug.lua")
   local chunk, err = (loadstring or load)(quelle or "", "@werkzeug.lua")
@@ -22,7 +25,7 @@ return function(mod)
   end
   local W = chunk()(mod)
   if not W then return end
-  for _, baustein in ipairs({ "zeichen", "dialoge", "daten", "port_texte", "grafik", "layout" }) do
+  for _, baustein in ipairs({ "zeichen", "dialoge", "daten", "port_texte", "grafik", "layout", "port_extras" }) do
     W.baustein(baustein)
   end
   W.bericht()

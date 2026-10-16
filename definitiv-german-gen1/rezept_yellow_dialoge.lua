@@ -1,6 +1,15 @@
 -- Rezept yellow (dialoge): nur ROM-Adressen der deutschen yellow-ROM und Engine-Platzhalter, keine ROM-Inhalte
 return {
   text = {
+    YouWinText = { { 79902, 10 } },
+    YouLoseText = { { 79913, 10 } },
+    DrawText = { { 79924, 13 } },
+    ["TradeCenter_SelectMon.statsTrade"] = { { 22462, 16 } },
+    TradeCompleted = { { 23263, 17 } },
+    TradeCanceled = { { 23281, 18 }, "\n", { 23300, 18 } },
+    ["TwoOptionMenuStrings.TradeCancelMenu"] = { { 30008, 6 }, "\n", { 30015, 6 } },
+    CancelTextString = { { 22623, 9 } },
+    WaitingText = { { 19366, 13 } },
     ["DisplayBattleMenu.oldManName"] = { { 249831, 5 } },
     ["DisplayBattleMenu.profOakName"] = { { 249837, 9 } },
     FanClubChairPrintText1 = { { 711239, 7 }, "{PLAYER}", { 711247, 1 }, "\n", { 711249, 13 }, "\v", { 711263, 11 }, "\v", { 711275, 14 }, "\f", { 711290, 12 }, "\n", { 711303, 16 }, "\v", { 711320, 11 }, "\f", { 711332, 17 }, "\n", { 711350, 5 }, "\f", { 711356, 14 }, "\n", { 711371, 4 }, "\v", { 711376, 14 }, "{DONE}" },
@@ -549,7 +558,7 @@ return {
     _EnemyAppearedText = { "{RAM:wEnemyMonNick}\n", { 655365, 11 }, "{PROMPT}" },
     _EnemyMonFaintedText = { "{RAM:wEnemyMonNick}\n", { 792872, 14 }, "{PROMPT}" },
     _EnemyRanText = { "{RAM:wEnemyMonNick}\n", { 636211, 15 }, "{PROMPT}" },
-    _EnemysWeakText = { { 655516, 15 }, "\n", { 655532, 5 }, "{DONE}" },
+    _EnemysWeakText = { { 655516, 15 }, "\n", { 655532, 5 }, "{RAM:wBattleMonNick}!{DONE}" },
     _EnoughText = { { 655553, 6 }, "{DONE}" },
     _EvadedAttackText = { "{TARGET}\n", { 688786, 16 }, "{PROMPT}" },
     _EvolvedText = { "{RAM:wStringBuffer}", { 970507, 6 }, "{DONE}" },

@@ -21,6 +21,29 @@ return function(W)
   W.apply("trainers", R.trainers, function(k, v) mod.content.trainers:patch(k, { name = T(v) }) end)
   -- Typnamen (Statusseite, Attackenauswahl, Ruhmeshalle)
   W.apply("typen", R.types, function(k, v) mod.content.type_chart:patch(k, { name = T(v) }) end)
+  -- Statuskuerzel (Kampf, Team, Statusseite): die DE-ROM schreibt SLF/GIF/BRT/GFR/PAR einzeln per Code
+  -- (PrintStatusAilment: ld a,"G" / ld [hli],a ...); das Rezept nennt die drei Buchstaben-Bytes
+  W.apply("status", R.statusNamen, function(k, v) mod.content.statuses:patch(k, { label = T(v) }) end)
+  -- Schultafel Vertania City: der Port schreibt die sechs Kuerzel fest in data/scripts/flavor/
+  -- viridian_school_house.lua (BOARD_LABELS, ohne Strings()).  Das Tafel-Menue zeigt auf genau diese Tabelle
+  -- (board.labels) -> beim Aufschlagen des Menues die sechs Eintraege durch die DE-ROM-Texte ersetzen.
+  if R.schultafel then
+    local de = {}
+    for i, v in ipairs(R.schultafel) do de[i] = T(v) end
+    pcall(function()
+      local Stack = require("src.core.StateStack")
+      Stack._deutschPush = Stack._deutschPush or Stack.push
+      Stack.push = function(self, state, ...)
+        local l = type(state) == "table" and rawget(state, "labels")
+        -- erkannt an den Pruefsummen von " SLP" (erster) und " QUIT" (letzter Eintrag)
+        if type(l) == "table" and #l == 6 and #de == 6 and type(l[1]) == "string" and type(l[6]) == "string"
+            and W.pruefsumme(l[1]) == "~33bd50d80004" and W.pruefsumme(l[6]) == "~eec1b1280005" then
+          for i = 1, 6 do l[i] = de[i] end
+        end
+        return Stack._deutschPush(self, state, ...)
+      end
+    end)
+  end
   -- Ortsnamen der Karte / Fliegen-Menue: der Port zeigt Strings(loc.name)
   W.apply("orte", R.mapNames, function(k, v) mod.content.strings:override(k, T(v)) end)
 

@@ -54,6 +54,24 @@ return {
     tile = 44,
   } },
   gfx = { {
+    -- Druckerdiplom (DiplomaGraphics): Ueberschrift GLUECKWUNSCH statt CONGRATULATIONS
+    bpp = 2,
+    h = 64,
+    len = 2032,
+    off = 957520,
+    path = "assets/generated/diploma/yellow_tiles.png",
+    transparent = false,
+    w = 128,
+  }, {
+    -- Drucker (GFX_ea563): KP statt HP
+    bpp = 1,
+    h = 8,
+    len = 8,
+    off = 959920,
+    path = "assets/generated/printer/hp.png",
+    transparent = false,
+    w = 8,
+  }, {
     bpp = 2,
     h = 8,
     len = 304,
