@@ -1,32 +1,27 @@
 -- Definitiv German Gen 1  (Rot, Blau, Gelb)
 --
--- Dieser Mod enthaelt KEINE Texte oder Grafiken der Spiele, auch keine englischen Texte als Suchschluessel.
--- Er bringt nur Rezepte mit (Adressen in der deutschen ROM; Texte des Ports nur als Pruefsumme, siehe
--- werkzeug.lua) und liest beim Start die deutsche ROM der laufenden Edition, die du im Launcher importiert
--- hast -- immer genau das Gegenstueck.
+-- Dieser Mod enthält keine Texte oder Grafiken der Spiele und keine englischen Texte als Suchschlüssel.  Er bringt
+-- nur Rezepte mit (Adressen in der deutschen ROM, Texte des Ports nur als Prüfsumme) und liest beim Start die
+-- deutsche ROM der laufenden Edition, die im Launcher unter MODS importiert wurde.
 --
--- Aufbau (jeder Baustein hat sein eigenes Rezept rezept_<edition>_<baustein>.lua):
---   werkzeug.lua    Edition, deutsche ROM, Rezepte, gemeinsame Helfer
---   zeichen.lua     Zeichentabelle und Sonderzeichen-Woerter (TEAM ROCKET, PC, TM ...) aus der DE-ROM
---   dialoge.lua     alle Dialogtexte                    (mod.content.text)
---   daten.lua       Pokemon, Attacken, Items, Trainer, Typen, Orte, Abspann, Tausch, Namensvorschlaege
---   port_texte.lua  feste Texte des Ports (mod.content.strings) und Menues
---   grafik.lua      Bilder, Schrift, Titelbild         (Assets.compose)
---   layout.lua      Kaesten und Positionen wie in der DE-ROM
---   port_extras.lua Port-Zusaetze ohne ROM-Gegenstueck (MODS-Verwaltung, Link-Menue, Steuerung, Farben, Optionen,
---                   CHEF-Bonuskampf)
---   port_extras_daten.lua  deutsche Texte dazu, ERZEUGT von Test/werkzeug/port_extras_quelle.py
+--   kern.lua          deutsche ROM → Port-Extraktor → Texte, Namen, Pokédex, Schrift, Bilder
+--   zeichen.lua       Zeichensatz der deutschen Editionen (welcher Code welches Zeichen ist)
+--   rezept_<ed>.lua   DE-Adressen der Port-Symbole je Edition (erzeugt von Test/werkzeug/rezept_gb.py)
+local VERSION = "1.0.3"
+
 return function(mod)
-  local quelle = mod:read("werkzeug.lua")
-  local chunk, err = (loadstring or load)(quelle or "", "@werkzeug.lua")
+  local quelle = mod:read("kern.lua")
+  local chunk, err = (loadstring or load)(quelle or "", "@kern.lua")
   if not chunk then
-    mod.log:warn("Deutsch Gen 1: werkzeug.lua fehlerhaft: %s", tostring(err))
+    mod.log:warn("Definitiv German: kern.lua fehlerhaft: %s", tostring(err))
     return
   end
-  local W = chunk()(mod)
-  if not W then return end
-  for _, baustein in ipairs({ "zeichen", "dialoge", "daten", "port_texte", "grafik", "layout", "port_extras" }) do
-    W.baustein(baustein)
-  end
-  W.bericht()
+  local K = chunk()(mod, VERSION)
+  -- andere Mods (z. B. Definitiv XP) fragen, ob die deutsche Fassung wirklich läuft
+  pcall(function()
+    mod.exports = mod.exports or {}
+    mod.exports.deutsch = function() return K.aktiv == true end
+  end)
+  local ok, fehler = pcall(K.start)
+  if not ok then mod.log:warn("Definitiv German: %s", tostring(fehler)) end
 end

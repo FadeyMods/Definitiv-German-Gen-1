@@ -14,8 +14,18 @@ die englische ROM die deutsche.
 - **Deutsche Schrift** – Umlaute, ß und die Sonderzeichen der deutschen Spiele
 - **Deutsche Grafiken** – Titelbild (ROTE / BLAUE / GELBE EDITION), Copyright-Zeile, Spielautomat, Pokédex-Einheiten, Gelb: Surf-Minigame, Druckerdiplom und Drucker
 - **Deutsche Anordnung** – Menüs und Kästen sitzen wie im deutschen Original
-- **Zusätze von gen1recomp** – Mod-Verwaltung, Optionen, Link- und Online-Bereich (Union-Kampf und -Tausch) auf
-  Deutsch; der Launcher bleibt englisch
+- **Zusätze von gen1recomp** – Mod-Verwaltung, Optionen und Link-Meldungen auf Deutsch; der Launcher bleibt
+  englisch
+
+## Bekannte Grenze: Online-Spiel
+
+Die Online-Funktionen von gen1recomp (KONNEX-Klub online, Arenen und Turniere) sind mit aktivem Mod **nicht
+nutzbar**. gen1recomp lässt online nur reine Übersetzungs-Mods zu, die nichts am Programm ändern. Dieser Mod muss
+aber ins Programm eingreifen, um alles aus deiner deutschen ROM zu lesen. Außerdem darf online grundsätzlich kein
+Mod die Namen von Pokémon, Attacken und Items ändern.
+
+Zum Online-Spielen den Mod im Launcher unter **MODS** abschalten – online ist das Spiel dann englisch. Das ist eine
+Vorgabe von gen1recomp und lässt sich nicht im Mod lösen, ohne diese Prüfung zu umgehen.
 
 ## Keine ROM-Inhalte enthalten
 
@@ -24,7 +34,7 @@ ROM). Beim Start liest er deine eigene deutsche ROM und baut daraus alles zusamm
 
 ## Voraussetzungen
 
-- gen1recomp (getestet mit **0.3.89**), mit importierter englischer ROM wie gewohnt
+- gen1recomp (getestet mit **0.3.95**), mit importierter englischer ROM wie gewohnt
 - Deine **deutsche ROM** der Edition, die du spielen willst (jede Edition braucht nur ihre eigene):
 
 | Edition | MD5 |
