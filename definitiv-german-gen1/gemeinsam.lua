@@ -1,8 +1,8 @@
 -- Definitiv German – gemeinsame Bausteine aller drei Mods (Gen 1, Gen 2, Gen 3).
--- Quelle: Test/mods/gemeinsam/gemeinsam.lua; jeder Mod bringt eine identische Kopie mit (Test/werkzeug/
--- mod_bauen.py), damit er allein lauffähig bleibt.
+-- Von Hand gepflegt; jeder Mod bringt eine byte-gleiche Kopie mit, damit er allein lauffähig bleibt.
+-- Änderungen immer in alle drei Mods übernehmen.
 --
---   G.pruefsumme(s)                      "~" + FNV-1a 32 Bit + Länge (wie Test/werkzeug/pruefsumme.py)
+--   G.pruefsumme(s)                      "~" + FNV-1a 32 Bit (Hex) + Länge
 --   G.katalog_einhaengen(data, tab, kx)  Data.strings um Prüfsummen-Nachschlag ergänzen (+ Bildschirm-Kontexte)
 --   G.kontexte_einhaengen(dateien)       Funktionen der Quelldateien setzen G.kontext während ihres Laufs
 --   G.literale_einhaengen(l)             Port-Literale ohne Strings() beim Zeichnen tauschen (je Quelldatei)
@@ -93,7 +93,8 @@ return function(mod)
   end
 
   -- l: Quelldatei → { ganz = {Prüfsumme → DE}, anfang = {{Länge, Prüfsumme, DE, frei}}, ende = {{Länge, Prüfsumme,
-  -- DE}} }; Font.draw tauscht, solange eine Funktion dieser Datei läuft
+  -- DE}} }; getauscht wird in Font.encode (G.literal_encode_einhaengen), solange eine Funktion dieser Datei läuft.
+  -- Gen 3 nutzt dieses Format nicht (eigener Tausch in kern.lua).
   function G.literale_einhaengen(l)
     if type(l) ~= "table" or not next(l) then return end
     local function tauschen(t, e)
@@ -387,8 +388,8 @@ return function(mod)
     -- nur das Modul der eigenen Generation laden (ein fremdes Modul gälte sonst als vom Spiel geladen)
     local eigen = ({ ["1"] = "src.ui.union.gen1.Text", ["2"] = "src.ui.gen2.union.Text" })[
       tostring(mod.id):match("gen(%d)") or ""]
-    for _, modul in ipairs({ eigen }) do
-      local ok, T = G.port_modul(modul)
+    if eigen then
+      local ok, T = G.port_modul(eigen)
       if ok and type(T) == "table" and type(T.gameName) == "function" then
         local okv, GV = G.port_modul("src.core.GameVersion")
         local alt = T.gameName

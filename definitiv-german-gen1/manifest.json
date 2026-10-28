@@ -1,7 +1,7 @@
 {
   "id": "definitiv-german-gen1",
   "name": "Definitiv German Gen 1",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "api": 2,
   "entry": "main.lua",
   "profile": "content",
@@ -9,7 +9,7 @@
     "engine_internals"
   ],
   "category": "Translation",
-  "game_version": ">=0.0.0-0 <2.0.0",
+  "game_version": ">=0.3.97 <2.0.0",
   "priority": 50,
   "games": [
     "red",
@@ -55,5 +55,5 @@
     "deutsch-gen1",
     "definitiv-german"
   ],
-  "description": "Macht Rot, Blau und Gelb komplett deutsch – Texte, Namen, Schrift und Grafiken werden beim Start aus DEINER deutschen ROM gelesen, genau wie sie dort stehen. Der Mod selbst enthält keine ROM-Inhalte."
+  "description": "Macht Rot, Blau und Gelb komplett deutsch - Texte, Namen, Schrift und Grafiken werden beim Start aus DEINER deutschen ROM gelesen, genau wie sie dort stehen. Der Mod selbst enthält keine ROM-Inhalte."
 }

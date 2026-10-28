@@ -1,5 +1,16 @@
--- Rezept yellow: Adressen der deutschen ROM für die Symbole des Port-Manifests (erzeugt von
--- Test/werkzeug/rezept_gb.py aus der Paarung; Belege in Test/aus/paarung).  Enthält keine ROM-Inhalte.
+-- Rezept yellow (Gelbe Edition): Positionen in der deutschen ROM für den Port-Extraktor und die Haken in kern.lua.
+-- Von Hand gepflegt.  Enthält keine ROM-Inhalte: nur Bank/Adresse, Spalten, Längen und Prüfsummen englischer
+-- Port-Texte (G.pruefsumme, gemeinsam.lua).
+--
+--   s   Symbol des Port-Manifests (tools/rom_manifest*.json) → { Bank, Adresse } in der DE-ROM
+--   d   Dialog-Label → Platzhalter des DE-Texts { { Textbefehl, Token }, … } in DE-Reihenfolge (text.dynamic)
+--   e   Tilemap ohne EN-Symbol: Name → { Bank, Adresse, Länge }
+--   p   Prüfsumme eines Port-Texts → Quelle: { "t", Label[, Rand] } Dialogtext, { "r", Bank, Adresse, Art,
+--       Zeile, Wort } @-Zeichenkette (G.romtext), { "k", Teile, Formate } zusammengesetzt (G.zusammensetzen)
+--   pk  wie p, je Quelldatei des Ports (gleicher englischer Text, im Original andere ROM-Stelle)
+--   pl  Prüfsumme eines Port-Literals → { Bank, Adresse, Zeile } (Zeile einer @-Zeichenkette)
+--   die übrigen Felder sind an ihrer Stelle beschrieben; Adressen von Code-Operanden (hlcoord, ld) wie in
+--   pokered benannt
 return {
   s = {
     ["AbraPicBack"] = { 12, 29605 },
@@ -4579,7 +4590,7 @@ return {
     ["_DaycareGentlemanMonNeedsMoreTimeText"] = { { 1, "{RAM:wNameBuffer}" } },
     ["_DaycareGentlemanOweMoneyText"] = { { 2, "{NUM:wDayCareTotalCost, 2 | LEADING_ZEROES | LEFT_ALIGN}" } },
     ["_DaycareGentlemanWillLookAfterMonText"] = { { 1, "{RAM:wNameBuffer}" } },
-    ["_DexCompletionText"] = { { 9, "{NUM:hOaksAideRequirement, 1, 3}" }, { 9, "{NUM:hDexRatingNumMonsOwned, 1, 3}" } },
+    ["_DexCompletionText"] = { { 9, "{NUM:hDexRatingNumMonsSeen, 1, 3}" }, { 9, "{NUM:hDexRatingNumMonsOwned, 1, 3}" } },
     ["_DexSeenOwnedText"] = { { 9, "{NUM:wDexRatingNumMonsSeen, 1, 3}" }, { 9, "{NUM:wDexRatingNumMonsOwned, 1, 3}" } },
     ["_DidNotLearnText"] = { { 1, "{RAM:wLearnMoveMonName}" }, { 1, "{RAM:wStringBuffer}" } },
     ["_DoYouWantToNicknameText"] = { { 1, "{RAM:wNameBuffer}" } },
@@ -4725,12 +4736,13 @@ return {
   e = {
     ["SurfingMinigame_DeTitelTilemap"] = { 62, 20579, 360 },
   },
-  -- Titel: Kachelzeilen und Kachel-Ladeliste aus dem DE-Titelcode (Test/werkzeug/gb_titel.py)
+  -- Titel: Kachelzeilen (Spalte, Kacheln) und Kachel-Ladeliste { erste Kachel, Bank, Adresse, Anzahl } aus dem
+  -- DE-Titelcode
   titel = {
     copyright = { spalte = 2, kacheln = { 224, 225, 226, 227, 228, 238, 239, 127, 229, 230, 231, 232, 233, 234, 235, 236, 237 } },
     laden = { { 224, 4, 19528, 5 }, { 238, 4, 19976, 2 }, { 229, 4, 19832, 9 } },
   },
-  -- Port-Texte, deren englische Vorlage in der ROM steht (Test/werkzeug/strings_*_gb.py)
+  -- Port-Texte, deren englische Vorlage in der ROM steht
   p = {
     ["~019969320004"] = { "r", 1, 29443, 2, 1, 0 },
     ["~026fc4bf0010"] = { "k", { { "t", "_ChargeMoveEffectText", -1, {  }, { ["{USER}"] = { 1 } } }, { "t", "_FlewUpHighText", -1, {  }, {  } } }, { "%s" } },
@@ -4802,6 +4814,7 @@ return {
     ["~2e701772000a"] = { "k", { { "t", "_EvolvedText", -1, {  }, { ["{RAM:wStringBuffer}"] = { 1 } } } }, { "%s" } },
     ["~2ebba1080009"] = { "k", { { "r", 8, 22358, 1, 0, 0, {  } }, { "a", 1 } }, { "%d" } },
     ["~2f05eacf0013"] = { "k", { { "t", "_RanFromBattleText", -1, {  }, { ["{USER}"] = { 1 } } } }, { "%s" } },
+    ["~2fd1fdec000a"] = { "r", 1, 29476, 3, 1, 0 },
     ["~314dc8630008"] = { "r", 16, 16986, 1, 0, 0 },
     ["~318d1e450012"] = { "k", { { "t", "_FoundHiddenCoinsText", -1, {  }, { ["{NUM:hCoins, 2 | LEADING_ZEROES | LEFT_ALIGN}"] = { 2 }, ["{PLAYER}"] = { 1 } } } }, { "%s", "%d" } },
     ["~328188740017"] = { "t", "_WhatDoYouWantText" },
@@ -4825,6 +4838,7 @@ return {
     ["~3f4e69e90020"] = { "t", "_NothingHereText" },
     ["~4072cd800014"] = { "k", { { "t", "_HurtByPoisonText", -1, {  }, { ["{USER}"] = { 1 } } } }, { "%s" } },
     ["~4075bd920008"] = { "r", 4, 22615, 2, 1, 0 },
+    ["~4084086f0004"] = { "r", 16, 23658, 3, 0, 1 },
     ["~414e1bce000c"] = { "r", 28, 21201, 1, 0, 0 },
     ["~416bb921001d"] = { "t", "_NeedYourPokemonText" },
     ["~417a53270006"] = { "t", "_CardKeySuccessText1" },
@@ -4915,6 +4929,7 @@ return {
     ["~745eac8c0014"] = { "k", { { "t", "_ItemUseText001", -1, {  }, { ["{PLAYER}"] = { 1 } } }, { "l", "\n" }, { "t", "_ItemUseText002", -1, { ["{RAM:wStringBuffer}"] = { "items", "SAFARI_BALL" } }, {  } } }, { "%s" } },
     ["~74659850001f"] = { "t", "_TooImportantToTossText" },
     ["~74ba8ac60021"] = { "t", "_NoMonText" },
+    ["~75dee7ed0009"] = { "k", { { "r", 16, 17261, 3, 0, 0, {  } }, { "a", 1 }, { "l", "m" } }, { "%5.1f" } },
     ["~763818ae000e"] = { "k", { { "t", "_CantMoveText", -1, {  }, { ["{USER}"] = { 1 } } } }, { "%s" } },
     ["~7730cee70039"] = { "t", "_AccessedOaksPCText" },
     ["~77cc53c00007"] = { "r", 4, 22128, 1, 0, 0 },
@@ -4926,6 +4941,7 @@ return {
     ["~7a3d09d1002a"] = { "t", "_UnveiledGhostText" },
     ["~7b46915d0008"] = { "k", { { "r", 0, 6216, 1, 0, 0, {  } }, { "a", 1 } }, { "%s" } },
     ["~7be1bf970039"] = { "t", "_CantTakeMonText" },
+    ["~7c09c701000a"] = { "k", { { "r", 16, 17261, 3, 1, 0, {  } }, { "l", "  ???kg" } }, {  } },
     ["~7c1f653b0003"] = { "r", 16, 16993, 2, 1, 0 },
     ["~7c68fbfc0019"] = { "k", { { "t", "_ItemUseBallText05", -1, {  }, { ["{RAM:wEnemyMonNick}"] = { 1 } } } }, { "%s" } },
     ["~7cadb53d002f"] = { "t", "_HiddenItemBagFullText" },
@@ -4965,6 +4981,7 @@ return {
     ["~92dc41d2001c"] = { "t", "_NothingToDepositText" },
     ["~9355e4f00003"] = { "r", 1, 29992, 2, 1, 0 },
     ["~94871066000a"] = { "t", "_NoEffectText" },
+    ["~94f4c6280008"] = { "k", { { "r", 16, 17261, 3, 0, 0, {  } }, { "l", "  ???m" } }, {  } },
     ["~962579790016"] = { "k", { { "t", "_SuckedHealthText", -1, {  }, { ["{TARGET}"] = { 1 } } } }, { "%s" } },
     ["~967822ad0010"] = { "r", 15, 21687, 1, 0, 0 },
     ["~96f7ebd60008"] = { "r", 1, 24029, 2, 2, 0 },
@@ -5001,6 +5018,7 @@ return {
     ["~a9748960000f"] = { "k", { { "t", "_TrainerSentOutText", -1, {  }, { ["{RAM:wEnemyMonNick}"] = { 2 }, ["{RAM:wTrainerName}"] = { 1 } } } }, { "%s", "%s" } },
     ["~a99576540010"] = { "t", "_PPRestoredText" },
     ["~ab328979000f"] = { "r", 29, 24300, 1, 0, 0 },
+    ["~ab8548780004"] = { "r", 16, 23682, 3, 0, 1 },
     ["~ab9426cd007c"] = { "t", "_OakSpeechText3" },
     ["~abda3370001e"] = { "t", "_GameCornerOutToLunchText" },
     ["~ac2c86db0009"] = { "r", 20, 26525, 1, 0, 0 },
@@ -5013,6 +5031,7 @@ return {
     ["~afc6a9030013"] = { "k", { { "t", "_RegainedHealthText", -1, {  }, { ["{USER}"] = { 1 } } } }, { "%s" } },
     ["~b08fab450011"] = { "t", "_NotEnoughCoinsSlotMachineText" },
     ["~b1eefb800014"] = { "k", { { "t", "_ChargeMoveEffectText", -1, {  }, { ["{USER}"] = { 1 } } }, { "t", "_MadeWhirlwindText", -1, {  }, {  } } }, { "%s" } },
+    ["~b22800f60006"] = { "r", 16, 23670, 3, 0, 1 },
     ["~b62fc9aa001a"] = { "t", "_CardKeyFailText" },
     ["~b6327a24000f"] = { "k", { { "t", "_PlayerBlackedOutText2", 1, {  }, { ["{PLAYER}"] = { 1 } } } }, { "%s" } },
     ["~b7dc06f70014"] = { "k", { { "t", "_GettingPumpedText", -1, {  }, { ["{USER}"] = { 1 } } } }, { "%s" } },
@@ -5068,6 +5087,7 @@ return {
     ["~da74d4bd0021"] = { "t", "_CannotFlyHereText" },
     ["~dafc5de50014"] = { "k", { { "t", "_UnleashedEnergyText", -1, {  }, { ["{USER}"] = { 1 } } } }, { "%s" } },
     ["~db9bbc480005"] = { "k", { { "r", 28, 20726, 1, 0, 0, {  } }, { "l", " " }, { "a", 1 } }, { "%s" } },
+    ["~dd0ea386000b"] = { "k", { { "r", 16, 17261, 3, 1, 0, {  } }, { "a", 1 }, { "l", "kg" } }, { "%5.1f" } },
     ["~dd1ea6f10007"] = { "r", 8, 22358, 1, 0, 0 },
     ["~de6bcc970020"] = { "t", "_PokemartItemBagEmptyText" },
     ["~df84f419001a"] = { "k", { { "t", "_PikachuUnhappyText", -1, {  }, { ["{RAM:wNameBuffer}"] = { 1 } } } }, { "%s" } },
@@ -5156,25 +5176,24 @@ return {
     ["src/ui/StartMenu.lua"] = { ["~4ae76f140006"] = { "r", 1, 28712, 1, 0, 0 } },
     ["src/ui/TitleState.lua"] = { ["~4ae76f140006"] = { "r", 1, 23822, 2, 2, 0 } },
   },
-  -- Spielstand-Fenster beim SICHERN: Rahmen x/Breite und Spalte der Beschriftungen EN → DE
-  -- (Test/werkzeug/gb_speicherfenster.py, save.asm)
+  -- Spielstand-Fenster beim SICHERN: Rahmen x/Breite und Spalte der Beschriftungen EN → DE (save.asm)
   speicherfenster = { en = { 4, 14, 5 }, de = { 3, 15, 4 } },
   -- JA/NEIN-Fenster: Breite des Menüs YES_NO (TwoOptionMenuStrings) EN/DE und verschobene
-  -- Fensterlagen x,y EN → DE (Test/werkzeug/gb_zwei_optionen.py)
+  -- Fensterlagen x,y EN → DE
   zwei_optionen = { ja_nein = { 4, 5 }, fenster = { { 14, 7, 13, 7 } } },
-  -- Name des Geists im PKMN-TURM: Sofortwerte „ld a, n / ld [hli], a“ ab Bank/Adresse (core.asm .isGhost,
-  -- Test/werkzeug/gb_geist.py)
+  -- Name des Geists im PKMN-TURM: Sofortwerte „ld a, n / ld [hli], a“ ab Bank/Adresse (core.asm .isGhost)
   geist = { 61, 24746 },
-  -- Statuskürzel SLP/PSN/BRN/FRZ/PAR: fünf Blöcke „3E x 22 3E y 22 36 z C9“ ab Bank/Adresse
-  -- (PrintStatusAilment, Test/werkzeug/gb_status.py)
+  -- Statuskürzel SLP/PSN/BRN/FRZ/PAR: fünf Blöcke „3E x 22 3E y 22 36 z C9“ ab Bank/Adresse (PrintStatusAilment)
   status = { 22, 20127 },
-  -- Namenseingabe: Buchstabentafeln der DE-ROM (Test/werkzeug/gb_alphabet.py)
+  -- Namenseingabe: Buchstabentafeln der DE-ROM (groß/klein)
   alphabet = { gross = { 1, 25966 }, klein = { 1, 25905 } },
-  -- Namen aus der DE-ROM: Tausch-Spitznamen (TradeMons, gb_namen.py), Namensvorschläge (DefaultNames…)
+  -- Namen aus der DE-ROM: Tausch-Spitznamen (TradeMons: Bank, Adresse, Anzahl, Abstand), Namensvorschläge
+  -- (DefaultNamesPlayer/Rival)
   namen = { tausch = { 28, 23548, 10, 14 }, spieler = { 1, 26685 }, rivale = { 1, 26704 } },
-  -- Kampfmenü nach dem DE-Layout (TextBoxTextAndCoordTable, DisplayBattleMenu; gb_kampfmenue.py)
+  -- Kampfmenü nach dem DE-Layout (TextBoxTextAndCoordTable, DisplayBattleMenu): Kasten x1,y1,x2,y2, Text x,y,
+  -- Cursor-Spalten, Zeichenkette BattleMenuText
   kampfmenue = { box = { 6, 12, 19, 17 }, text = { 8, 14 }, cursor = { 7, 12 }, zeichen = { 1, 29456 } },
-  -- ROM-Literale: Menüwörter der Port-Skripte, die im Original aus der ROM kommen (gb_romliterale.py)
+  -- ROM-Literale: Menüwörter der Port-Skripte, die im Original aus der ROM kommen
   pl = {
     ["~60646f130004"] = { 23, 24091, 0 },
     ["~b87a74430004"] = { 23, 24091, 1 },
@@ -5189,11 +5208,42 @@ return {
     ["~71164b75000c"] = { 23, 23820, 3 },
     ["~d03e5b4e000c"] = { 23, 23820, 2 },
   },
-  -- Arena-Statuen: Stadt- und Leitername je Arena (scripts/*Gym.asm .CityName/.LeaderName, gb_arenen.py)
+  -- Arena-Statuen: Bank, Stadt- und Leitername je Arena (scripts/*Gym.asm .CityName/.LeaderName)
   arenen = { CELADON_GYM = { 18, 18759, 18774 }, CERULEAN_GYM = { 23, 17835, 17847 }, CINNABAR_GYM = { 29, 20260, 20274 }, FUCHSIA_GYM = { 29, 19468, 19483 }, PEWTER_GYM = { 23, 17034, 17048 }, SAFFRON_GYM = { 23, 20263, 20278 }, VERMILION_GYM = { 23, 18763, 18775 }, VIRIDIAN_GYM = { 29, 16636, 16650 } },
-  -- Abspann: CreditsOrder / CreditsTextPointers der DE-ROM (Test/werkzeug/gb_abspann.py)
+  -- Abspann: CreditsOrder / CreditsTextPointers der DE-ROM
   abspann = { bank = 60, order = 20839, zeiger = 20950 },
-  -- Urkunde: Texte (Zeiger + Kachel) und Spielername aus dem DE-Code (Test/werkzeug/gb_diplom.py)
+  -- Urkunde: Kreis-Kachel, Spielername (Spalte, Zeile) und Texte { Bank, Adresse, Spalte, Zeile } aus dem DE-Code
   diplom = { kreis = 16, name = { 9, 6 }, texte = { { 58, 23228, 6, 2 }, { 58, 23237, 2, 4 }, { 58, 23255, 2, 6 }, { 58, 23272, 2, 8 }, { 58, 23326, 9, 16 } } },
-  -- ohne DE-Gegenstück (Handbeleg): SurfingMinigame_BeachIntroTilemap, SurfingMinigame_TitleTilemap, SurfingMinigame_ToSurfRadTilemap, SurfingMinigame_UseControlPadTilemap
+  -- Maschinen-Kürzel „TM“/„VM“ (GetMachineName: TechnicalPrefix, HiddenPrefix, je zwei Zeichen) ab Bank/Adresse
+  maschinen = { 0, 12086 },
+  -- Copyright-Tafel vor dem Intro: LoadCopyrightTiles (Kacheln ab $60: Bank, Adresse, Anzahl) und
+  -- CopyrightTextString (ab hlcoord 2, 7)
+  copyrightkarte = { kacheln = { 4, 19528, 30 }, text = { 1, 17238 }, spalte = 2 },
+  -- Safari-Kampfmenü: SAFARI_BATTLE_MENU_TEMPLATE und Operand von „ld b, n“ in DisplayBattleMenu
+  -- .safariRightColumn (Cursor-Spalte rechts)
+  safarimenue = { zeichen = { 1, 29476 }, cursor = { 15, 20593 } },
+  -- Kästen, die die DE-ROM anders setzt (TextBoxBorder-Aufrufe EN/DE verglichen): Port-Maße tx, ty, tw, th
+  -- EN → DE; false = beliebig; menue = Menu.new (still: ohne Tastenton, zeile: itemY), kasten = Font.drawBox
+  kaesten = {
+    { art = "menue", en = { 9, 10, 11, 8 }, de = { 8, 10, 12, 8 }, still = true },    -- Bills PC, Pokémon-Untermenü
+    { art = "menue", en = { 0, 0, 14, false }, de = { 0, 0, 16, false }, still = true }, -- Bills PC
+    { art = "menue", en = { 0, 0, 16, false }, de = { 0, 0, 17, false }, still = true }, -- PC-Menü, Spieler-PC
+    { art = "menue", en = { 0, 0, 15, 10 }, de = { 0, 0, 16, 10 }, zeile = 2 },        -- Link-Anleitung (Schultafel)
+    { art = "kasten", en = { 3, 4, 14, 9 }, de = { 3, 4, 15, 9 } },                    -- Link-Kampf: Gegenüberstellung
+    { art = "kasten", en = { 3, 10, 13, 3 }, de = { 3, 10, 15, 3 } },                  -- Link: „Bitte warten!“
+    { art = "menue", en = { 0, 0, 13, false }, de = { 0, 0, 15, false } },             -- Hauptmenü (TextBoxBorder c=13)
+  },
+  -- Surf-Minispiel, Ergebnistafel: Kachelfolgen der DE-ROM (SurfingMinigame Write…-Routinen, Bank $3E) mit der
+  -- Port-Zeichenstelle x, y (false = Zeilen 16/32/48): Bank, Adresse, Anzahl, Schritt
+  surfergebnis = { { 16, 16, 62, 19105, 7, 1 }, { 16, 32, 62, 19187, 5, 1 }, { 16, 48, 62, 19338, 6, 1 }, { 48, 64, 62, 19081, 8, 1 },
+    { 120, false, 62, 19163, 3, 3 } },
+  -- Weitere Stellen, die die DE-ROM anders setzt (hlcoord-Operanden EN/DE verglichen): je Bank/Adresse in der
+  -- DE-ROM.  muenzen: „MÜNZEN“ im Münzfenster (PrintPrizePrice); unentschieden: Link-Kampf-
+  -- Ergebnis „UNENTSCHIEDEN“; automat: JA/NEIN-Fenster „Noch eine Runde?“ (Kasten-hlcoord, Cursor-Spalte c);
+  -- abbrechen: Breite c des ABBRECHEN-Kastens im Handelscenter (TradeCenter_SelectMon); ende: TheEndTextString
+  -- und sein hlcoord (Abspann „ENDE“); surfrekord: hlcoord von Name und „s Rekord“ auf der Surf-Rekordseite
+  lage = { muenzen = { 20, 26592 }, unentschieden = { 4, 30624 }, automat = { kasten = { 13, 30313 }, cursor = { 13, 30316 } },
+    abbrechen = { 1, 22609 }, ende = { text = { 60, 20794 }, ort = { 60, 20776 } },
+    surfrekord = { name = { 58, 20926 }, text = { 58, 20936 } } },
+  -- Symbole ohne DE-Gegenstück (Surf-Titel deshalb über e): SurfingMinigame_BeachIntroTilemap, SurfingMinigame_TitleTilemap, SurfingMinigame_ToSurfRadTilemap, SurfingMinigame_UseControlPadTilemap
 }

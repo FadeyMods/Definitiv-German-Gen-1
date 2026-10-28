@@ -1,9 +1,8 @@
 -- Zeichensatz der deutschen Gen-1-Editionen (Rot, Blau, Gelb).
 --
--- Der deutsche Font belegt einige Codes anders als der englische (geprüft am Font der DE-ROM, Raster in
--- Test/aus/extrakt/red/font_raster_de.png): statt der Ligaturen 'd 'l 's 't 'v 'r 'm stehen dort Akzent- und
--- Umlautbuchstaben und eigene Apostroph-Glyphen.  Diese Tabelle sagt nur, welcher Code welches Zeichen ist –
--- die Glyphen selbst kommen aus der ROM des Spielers.
+-- Der deutsche Font belegt einige Codes anders als der englische (geprüft am Font der DE-ROM): statt der Ligaturen
+-- 'd 'l 's 't 'v 'r 'm stehen dort Akzent- und Umlautbuchstaben und eigene Apostroph-Glyphen.  Diese Tabelle sagt
+-- nur, welcher Code welches Zeichen ist; die Glyphen selbst kommen aus der ROM des Spielers.
 local Z = {}
 
 -- Code → Zeichen (Dekodieren der Texte)
