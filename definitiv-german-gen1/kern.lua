@@ -421,20 +421,65 @@ return function(mod, MODVERSION)
     if #t > 0 then return table.concat(t) end
   end
 
+  -- Drei Zeichen aus den Sofortwerten „3E x 22 3E y 22 36 z“ (ld a, x / ld [hli], a / ld a, y / ld [hli], a /
+  -- ld [hl], z) ab Bank/Adresse; nil, wenn dort kein solcher Block steht
+  local function drei_zeichen(ex, b, adr, charmap)
+    local r = ex.rom
+    if r:byte(b, adr) ~= 0x3E or r:byte(b, adr + 2) ~= 0x22 or r:byte(b, adr + 3) ~= 0x3E
+        or r:byte(b, adr + 5) ~= 0x22 or r:byte(b, adr + 6) ~= 0x36 then
+      return nil
+    end
+    return (charmap[tostring(r:byte(b, adr + 1))] or "") .. (charmap[tostring(r:byte(b, adr + 4))] or "")
+      .. (charmap[tostring(r:byte(b, adr + 7))] or "")
+  end
+
   -- Statuskürzel: fünf Blöcke „3E x 22 3E y 22 36 z C9“ (PrintStatusAilment), Reihenfolge SLP PSN BRN FRZ PAR
   local function status(ex, ort, charmap)
     if not ort then return nil end
-    local r, b, adr, s = ex.rom, ort[1], ort[2], {}
+    local b, adr, s = ort[1], ort[2], {}
     for _, id in ipairs({ "SLP", "PSN", "BRN", "FRZ", "PAR" }) do
-      if r:byte(b, adr) ~= 0x3E or r:byte(b, adr + 2) ~= 0x22 or r:byte(b, adr + 3) ~= 0x3E
-          or r:byte(b, adr + 5) ~= 0x22 or r:byte(b, adr + 6) ~= 0x36 or r:byte(b, adr + 8) ~= 0xC9 then
-        return nil
-      end
-      s[id] = (charmap[tostring(r:byte(b, adr + 1))] or "") .. (charmap[tostring(r:byte(b, adr + 4))] or "")
-        .. (charmap[tostring(r:byte(b, adr + 7))] or "")
+      s[id] = ex.rom:byte(b, adr + 8) == 0xC9 and drei_zeichen(ex, b, adr, charmap) or nil
+      if not s[id] then return nil end
       adr = adr + 9
     end
     return s
+  end
+
+  -- Kürzel für kampfunfähig (PrintStatusCondition bei KP 0): ein Block wie oben, DE „BSG“ (Rezept kampfunfaehig);
+  -- im Port der Katalogeintrag mit dieser Prüfsumme
+  local KUERZEL_FNT = "~f3cfdf930003"
+  local function kampfunfaehig(ex, ort, charmap)
+    return ort and drei_zeichen(ex, ort[1], ort[2], charmap) or nil
+  end
+
+  -- Feldattacken im Team-Menü: FieldMoveDisplayData (je Eintrag Attacke, Namensnummer, linkeste Kachel des Namens;
+  -- Ende $FF) → Spalte je Aktion des Port-Untermenüs (src/ui/PartyMenu.lua: action bzw. move)
+  local FELDAKTION = { [0x0F] = "cut", [0x13] = "fly", [0x39] = "surf", [0x46] = "strength", [0x94] = "flash",
+    [0x5B] = "DIG", [0x64] = "TELEPORT", [0x87] = "softboiled" }
+  local function feldattacken(ex, ort)
+    if not ort then return nil end
+    local t, adr = {}, ort[2]
+    for _ = 1, 16 do
+      local id = ex.rom:byte(ort[1], adr)
+      if id == 0xFF then break end
+      if FELDAKTION[id] then t[FELDAKTION[id]] = ex.rom:byte(ort[1], adr + 2) end
+      adr = adr + 3
+    end
+    if next(t) then return t end
+  end
+
+  -- Stockwerke der Aufzüge: im Original die Namen FLOOR_B2F … FLOOR_B4F in ItemNames (Index $54–$61, DE „UG2“,
+  -- „UG1“, „EG“, „S1“ … „S10“, „UG4“).  Ergebnis: Index → Name
+  local function stockwerke(ex, charmap)
+    if not ex.symbols["ItemNames"] then return nil end
+    local tab = ex:symbol("ItemNames")
+    local adr, t = tab.address, {}
+    for i = 1, 0x61 do
+      local name, n = ex.rom:readString(tab.bank, adr, charmap, 0x50, 20)
+      if i >= 0x54 then t[i] = name end
+      adr = adr + n
+    end
+    return t
   end
 
   -- Kampfmenü: Layout aus dem Rezept, Zeichen als Codes der DE-Zeichenkette BattleMenuText (Zeilen an $4E/$4F)
@@ -451,6 +496,19 @@ return function(mod, MODVERSION)
     end
     codes[#codes + 1] = zeile
     return { box = km.box, text = km.text, cursor = km.cursor, codes = codes }
+  end
+
+  -- Gelb, PIKACHU-Schreie: Länge jeder PCM-Aufnahme in Bytes (PikachuCriesPointerTable → dba, dort dw Länge).
+  -- PlayPikachuPCM spielt je Byte 8 Samples in 360 Takten bei gesperrten Interrupts (17556 Takte je Frame)
+  local function pikaschreie(ex)
+    if not ex.symbols["PikachuCriesPointerTable"] then return nil end
+    local tab = ex:symbol("PikachuCriesPointerTable")
+    local t = {}
+    for i = 0, 41 do
+      local bank = ex.rom:byte(tab.bank, tab.address + i * 3)
+      t[i + 1] = ex.rom:word(bank, ex.rom:word(tab.bank, tab.address + i * 3 + 1))
+    end
+    return t
   end
 
   local function extrahieren(edition, rom, rezept, Z)
@@ -473,6 +531,11 @@ return function(mod, MODVERSION)
     daten.safarimenue = safarimenue(ex, rezept.safarimenue)
     daten.lage = lage(ex, rezept.lage)
     daten.porttexte, daten.portkontexte = G.porttexte_lesen(ex, rezept, cm, daten)
+    -- Teamliste: Strings("FNT") (src/ui/PartyMenu.lua) zeigt das Kürzel, das PrintStatusCondition schreibt
+    local fnt = kampfunfaehig(ex, rezept.kampfunfaehig, cm)
+    if fnt then daten.porttexte[KUERZEL_FNT] = fnt end
+    daten.stockwerke = stockwerke(ex, cm)
+    daten.feldattacken = feldattacken(ex, rezept.feldattacken)
     daten.romliterale = G.romliterale_lesen(ex, rezept, cm)
     daten.diplom = diplom(ex, rezept.diplom, cm)
     daten.alphabet = alphabet(ex, rezept.alphabet, cm)
@@ -482,6 +545,7 @@ return function(mod, MODVERSION)
     daten.geist = geist(ex, rezept.geist, cm)
     daten.status = status(ex, rezept.status, cm)
     daten.kampfmenue = kampfmenue(ex, rezept.kampfmenue)
+    if edition == "yellow" then daten.pikaschreie = pikaschreie(ex) end
     -- nur Bilder behalten, die sich vom englischen Import unterscheiden (Schrift, Schilder, Titel …)
     for rel, bild in pairs(bilder) do
       if not G.anders_als_en(rel, bild) then bilder[rel] = nil end
@@ -490,54 +554,6 @@ return function(mod, MODVERSION)
   end
 
   -- ================================================================ Haken: Menüs
-
-  -- Start- und Hauptmenü wie im Original.  Der Port hängt an das START-Menü „MODS“ und „BEENDEN“ (StartMenu.lua,
-  -- statt „ZURÜCK“ = CloseStartMenu im Original) und an das Hauptmenü „SPIEL BEENDEN“ (TitleState.lua openMenu).
-  -- Mit der Mod-Option ORIGINAL-MENÜS (Standard an) über die Hooks ui.start_menu.items / ui.title_menu.items wie im
-  -- Original: START-Menü endet mit „ZURÜCK“ (schließt nur das Menü), Hauptmenü ohne SPIEL BEENDEN.  Erreichbar
-  -- bleibt alles: Mod-Verwaltung über OPTION → MODS oder im Launcher, Titelbild mit A+B+SELECT+START, Beenden über
-  -- das Fenster.
-  local function original_menues()
-    local ok, wert = pcall(function() return mod.options:get("originalmenues") end)
-    return not ok or wert ~= false
-  end
-  -- Die Hooks bekommen die Zeilen des Ports; sie werden vor weiter() an ihrer festen Stelle gemerkt und danach über
-  -- ihre Tabelle gefunden, Zeilen anderer Mods bleiben unberührt
-  local function menues_einhaengen()
-    if not (mod.hooks and mod.hooks.wrap) then return end
-    local Strings = require("src.core.Strings")
-    mod.hooks:wrap("ui.start_menu.items", function(weiter, game, items)
-      local quit, mods
-      if type(items) == "table" and original_menues() then
-        -- StartMenu.lua: … OPTION, [MODS, wenn Mods vorhanden], QUIT als letzte Zeile
-        local st = game and game.modStatus
-        quit = items[#items]
-        if st and #(st.available or {}) > 0 then mods = items[#items - 1] end
-      end
-      local liste = weiter(game, items)
-      if type(liste) ~= "table" or not quit then return liste end
-      local neu = {}
-      for _, it in ipairs(liste) do
-        if it == quit then
-          neu[#neu + 1] = { label = Strings("EXIT"), onSelect = function() end }
-        elseif it ~= mods then
-          neu[#neu + 1] = it
-        end
-      end
-      return neu
-    end, 0)
-    mod.hooks:wrap("ui.title_menu.items", function(weiter, game, items)
-      -- TitleState.lua: [WEITER], NEUES SPIEL, OPTION, SPIEL BEENDEN als letzte Zeile
-      local ende = type(items) == "table" and #items >= 3 and original_menues() and items[#items] or nil
-      local liste = weiter(game, items)
-      if type(liste) ~= "table" or not ende then return liste end
-      local neu = {}
-      for _, it in ipairs(liste) do
-        if it ~= ende then neu[#neu + 1] = it end
-      end
-      return neu
-    end, 0)
-  end
 
   -- Mod-Verwaltung (Port-Zusatz ManagerState) kürzt Zeilen vor dem Zeichnen auf 15 bzw. 17 Zeichen; der Literal-
   -- tausch beim Zeichnen (zusatz.l) sähe dann nur den gekürzten englischen Text.  Deshalb hier schon Zeilenmodelle,
@@ -644,6 +660,32 @@ return function(mod, MODVERSION)
     end)
   end
 
+  -- Aufzüge: der Port beschriftet die Stockwerksliste mit dem Kürzel aus der Karten-ID (data/scripts/story3.lua
+  -- elevatorFloors, „1F“, „B2F“); das Original druckt die Namen FLOOR_* aus ItemNames (DisplayElevatorFloorMenu) →
+  -- Kürzel auf ihren Index abbilden (B2F $54, B1F $55, nF $55 + n, B4F $61) und den Namen der DE-ROM setzen
+  local function aufzug_index(kuerzel)
+    if kuerzel == "B2F" then return 0x54 elseif kuerzel == "B1F" then return 0x55 elseif kuerzel == "B4F" then
+      return 0x61
+    end
+    local n = tonumber(kuerzel:match("^(%d+)F$") or "")
+    return n and 0x55 + n
+  end
+  local function aufzug_einhaengen(namen)
+    local ok, LM = pcall(require, "src.ui.ListMenu")
+    if not (ok and type(LM) == "table" and type(LM.new) == "function") then return end
+    local original = LM.new
+    LM.new = function(game, title, items, opts, ...)
+      if type(opts) == "table" and opts.kind == "elevator_floors" and type(items) == "table" then
+        for _, it in ipairs(items) do
+          local f = type(it) == "table" and it.value
+          local i = type(f) == "table" and type(f.token) == "string" and aufzug_index(f.token)
+          if i and namen[i] then it.label = namen[i] end
+        end
+      end
+      return original(game, title, items, opts, ...)
+    end
+  end
+
   -- ================================================================ Haken: Kampf
 
   -- Die DE-ROM setzt das Kampfmenü breiter (Kasten ab Spalte 6, Text ab Spalte 8, Cursor-Spalten 7/12); der Port
@@ -730,7 +772,9 @@ return function(mod, MODVERSION)
     end
   end
 
-  -- Geist im PKMN-TURM: disguiseAsGhost setzt das Literal "GHOST" als Gegnernamen → Name aus der DE-ROM
+  -- Geist im PKMN-TURM: disguiseAsGhost setzt ein englisches Literal als Gegnernamen und baut damit schon den
+  -- Erscheinungstext (_EnemyAppearedText) → Name aus der DE-ROM, Text mit diesem Namen neu (wie InitWildBattle
+  -- .isGhost, das den Namen vor dem Text setzt)
   local function geist_einhaengen(name)
     local ok, BS = pcall(require, "src.battle.BattleState")
     for _, fn in ipairs({ "makeGhost", "makeUnveiledGhost" }) do
@@ -738,10 +782,90 @@ return function(mod, MODVERSION)
         local original = BS[fn]
         BS[fn] = function(self, ...)
           local r = original(self, ...)
-          if self.enemy and self.enemy.name == "GHOST" then self.enemy.name = name end
+          if self.enemy and self.ghostReal then
+            self.enemy.name = name
+            self.introText = self:romText("_EnemyAppearedText", self.introText, name)
+          end
           return r
         end
       end
+    end
+  end
+
+  -- Kampftexte mit {SCROLL} (Gelb: _GreatlyRoseText/_GreatlyFellText bestehen in der DE-ROM nur aus <SCROLL>, „VERT
+  -- sinkt!“ rollt eine Zeile hoch, ohne zu warten).  Der Port kennt das Zeichen nicht und druckt das Wort.  Im
+  -- Kampftext rollt jede weitere Zeile ohne Warten ins zweizeilige Fenster (BattleState:startMessage, nur \v wartet)
+  -- → {SCROLL} als neue Zeile
+  local function kampftext_rollen_einhaengen()
+    local ok, BS = pcall(require, "src.battle.BattleState")
+    if not (ok and type(BS) == "table" and type(BS.startMessage) == "function") then return end
+    local original = BS.startMessage
+    BS.startMessage = function(self, item, ...)
+      if type(item) == "table" and type(item.text) == "string" and item.text:find("{SCROLL}", 1, true) then
+        local neu = {}
+        for k, v in pairs(item) do neu[k] = v end
+        neu.text = item.text:gsub("%s*{SCROLL}", "\n")
+        item = neu
+      end
+      return original(self, item, ...)
+    end
+  end
+
+  -- Kampf, Statusattacken (Stärke 0), die fehlschlagen oder nicht treffen („Nichts geschieht!“, „Die Attacke /
+  -- schlug fehl!“, „… / blieb unversehrt!“): das Original überspringt die Animation und hält vor der Meldung
+  -- (PlayerCheckIfFlyOrChargeEffect `ld c, 30 / call DelayFrames`, wie bei einem Fehlschuss); in der DE-ROM steht
+  -- „… / ben. …!“ deshalb jedes Mal über 20 Frames.  Der Port druckt die Meldung sofort (performMove, reine
+  -- Statusattacken: cancelMoveAnim, dann der Text) → nach dem Wegfall der Animation dieselbe Pause wie beim Fehlschuss
+  local function statusattacke_einhaengen()
+    local ok, BS = pcall(require, "src.battle.BattleState")
+    local okT, Timing = pcall(require, "src.core.Timing")
+    if not (ok and okT and type(BS) == "table" and type(BS.performMove) == "function"
+        and type(BS.cancelMoveAnim) == "function" and type(BS.waitNext) == "function") then return end
+    local original, abbrechen = BS.performMove, BS.cancelMoveAnim
+    local function halt(self, ...)
+      local zeile = self.moveAnimRow
+      local r = abbrechen(self, ...)
+      if zeile then self:waitNext(Timing.MOVE_STATUS_OR_MISS or 30) end
+      return r
+    end
+    BS.performMove = function(self, user, target, moveInst, ...)
+      local okm, move = pcall(self.moveDef, self, moveInst)
+      local rec = okm and type(move) == "table" and self:effectRecord(move.effect)
+      if not (type(rec) == "table" and move.power == 0 and rec.kind == "primary") then
+        return original(self, user, target, moveInst, ...)
+      end
+      return ersetzt({ { self, "cancelMoveAnim", halt } }, original, self, user, target, moveInst, ...)
+    end
+  end
+
+  -- Gelb, Fang-Vorführung (simulierte Eingabe, Vertania City und Eichs Fang): im Beutel steht „▶POKéBALL“ 20 Frames,
+  -- dann schließt er.  Der Port setzt danach wie Rot/Blau noch rund 7 Frames den hohlen Pfeil (BattleState
+  -- openOldManBag, hollowIndex nach home/list_menu.asm:91), die Gelbe DE-ROM nicht → in Gelb ohne diese Stufe schließen
+  local function fangvorfuehrung_einhaengen()
+    if not (GameVersion.isYellow and GameVersion.isYellow()) then return end
+    local ok, BS = pcall(require, "src.battle.BattleState")
+    if not (ok and type(BS) == "table" and type(BS.openOldManBag) == "function" and type(BS.ui) == "function") then
+      return
+    end
+    local original, ui = BS.openOldManBag, BS.ui
+    BS.openOldManBag = function(self, ...)
+      return ersetzt({ { self, "ui", function(s, fabrik, ...)
+        return ui(s, function(...)
+          local list = fabrik(...)
+          local skript = type(list) == "table" and list.script
+          if type(skript) == "function" then
+            list.script = function(l, ...)
+              local r = skript(l, ...)
+              if l.hollowIndex then
+                l.hollowIndex = nil
+                l.scriptTimer = math.huge  -- nächster Schritt des Skripts schließt den Beutel
+              end
+              return r
+            end
+          end
+          return list
+        end, ...)
+      end } }, original, self, ...)
     end
   end
 
@@ -1008,6 +1132,145 @@ return function(mod, MODVERSION)
     end)
   end
 
+  -- Level-Aufstieg, Fenster der Statuswerte (PrintStatsBox, Rahmen ab Spalte 9): die Zahlen stehen rechtsbündig mit
+  -- einem Feld Abstand zum rechten Rahmen (dreistellig ab Spalte 15).  Der Port setzt sie ab Spalte 16 direkt an den
+  -- Rahmen (BattleState StatBox:draw, x = 128; auch ohne Mod) → eine Spalte nach links
+  local function statusfenster_einhaengen()
+    local ok, BS = pcall(require, "src.battle.BattleState")
+    local SB = ok and type(BS) == "table" and BS.StatBox
+    if not (type(SB) == "table" and type(SB.draw) == "function") then return end
+    local Font = require("src.render.Font")
+    local original = SB.draw
+    SB.draw = function(self, ...)
+      local fd = Font.draw
+      return ersetzt({ { Font, "draw", function(text, x, y, ...)
+        if x == 128 then x = 120 end
+        return fd(text, x, y, ...)
+      end } }, original, self, ...)
+    end
+  end
+
+  -- Außerhalb der Außenkarten zeigt das Original den Randblock der Karte (Kartenkopf, je Karte festgelegt).  Der
+  -- Port füllt dort nach seiner Option RANDFÜLLUNG (Bäume, Wasser, Schwarz; src/render/TileRenderer.lua
+  -- borderBlockFor) → weitere Wahl ORIGINAL mit dem Randblock der Karte, als Vorgabe
+  local function randfuellung_einhaengen()
+    local ok, TR = pcall(require, "src.render.TileRenderer")
+    if not (ok and type(TR) == "table" and type(TR.VOID_FILLS) == "table" and type(TR.ensureBorderFill) == "function"
+        and type(TR.voidFillLabel) == "function") then return end
+    table.insert(TR.VOID_FILLS, 1, "original")
+    local alt_label = TR.voidFillLabel
+    TR.voidFillLabel = function(mode, ...)
+      if (mode or TR.voidFill) == "original" then return "ORIGINAL" end
+      return alt_label(mode, ...)
+    end
+    -- borderBlockFor nimmt für andere Kachelsätze den Randblock der Karte: während des Aufbaus der Füllung die Karte
+    -- nicht als OVERWORLD ausweisen
+    local alt_fill = TR.ensureBorderFill
+    TR.ensureBorderFill = function(self, ...)
+      local def = self.map and self.map.def
+      if TR.voidFill == "original" and type(def) == "table" and def.tileset == "OVERWORLD" and def.borderBlock then
+        return ersetzt({ { def, "tileset", "ORIGINAL" } }, alt_fill, self, ...)
+      end
+      return alt_fill(self, ...)
+    end
+    local okS, SaveData = pcall(require, "src.core.SaveData")
+    if okS and type(SaveData.defaultOptions) == "function" then
+      local alt_def = SaveData.defaultOptions
+      SaveData.defaultOptions = function(...)
+        local o = alt_def(...)
+        if type(o) == "table" and o.voidFill == "trees" then o.voidFill = "original" end
+        return o
+      end
+    end
+  end
+
+  -- Farben „OG RED“ (Port-Option FARBEN, Game Boy Color ohne eigenen Code): das Original zeigt auf dem GBC die feste
+  -- Palette der Boot-ROM für POKEMON RED.  Der Port legt dafür eine weichere eigene Abstufung an
+  -- (src/render/PaletteFX.lua OG_RED_SOFT_BG/_OBJ, „display correction“), die Werte der Boot-ROM stehen daneben
+  -- (GBC_BG/GBC_OBJ) → die weiche Abstufung mit den Werten der Boot-ROM füllen.  Spielautomat: die Walzensymbole
+  -- sind Sprites und stehen in der Objektpalette (grün); der Port zeichnet sie als Bild in der Hintergrundpalette
+  -- (SlotMachine drawReels) → wie die Sprites anderer Bildschirme in der Objektpalette nachzeichnen.
+  local function og_farben_einhaengen()
+    local ok, P = pcall(require, "src.render.PaletteFX")
+    if not (ok and type(P) == "table") then return end
+    if GameVersion.get() == "red" then
+      for _, paar in ipairs({ { P.OG_RED_SOFT_BG, P.GBC_BG }, { P.OG_RED_SOFT_OBJ, P.GBC_OBJ } }) do
+        local weich, boot = paar[1], paar[2]
+        if type(weich) == "table" and type(boot) == "table" then
+          -- die Farbtabellen selbst füllen: PaletteFX legt beim Laden weitere Tabellen an, die auf dieselben
+          -- Einträge zeigen (OG_OBJ_NORMAL für die Figuren der Karte)
+          for i, c in ipairs(boot) do
+            if type(weich[i]) == "table" then weich[i][1], weich[i][2], weich[i][3] = c[1], c[2], c[3] end
+          end
+        end
+      end
+    end
+    -- Gelb, Farben „OG YELLOW“ (CGBBasePalettes): die Pokédex-Liste steht in der DE-ROM in der Palette MEWMON
+    -- (gefangene Bälle rot/gelb), der Port setzt BROWNMON (PokedexMenu:sgbPalettes, Ball braun)
+    local okD, PD = pcall(require, "src.ui.PokedexMenu")
+    if GameVersion.isYellow() and okD and type(PD) == "table" and type(PD.sgbPalettes) == "function" then
+      local alt_pal = PD.sgbPalettes
+      PD.sgbPalettes = function(self, game, ...)
+        if P.usesYellowCgb() then return P.wholeNamed(game.data, "MEWMON") end
+        return alt_pal(self, game, ...)
+      end
+    end
+    -- Gelb, „OG YELLOW“, Kampfbeginn: solange Trainer- bzw. Rückenbild stehen, sendet SetPal_Battle für diese Seite
+    -- MonsterPalettes[0] = PAL_MEWMON aus CGBBasePalettes (DE-ROM: #181818/#F8F8F8).  Der Port nimmt dort MEWMON aus
+    -- seiner eigenen GBC-Tabelle (BattleState:sgbBattlePals, #313131/#FFFFF7) → MEWMON aus CGBBasePalettes; die
+    -- Team-Bälle des Gegners in GREENBAR
+    local okB, BS = pcall(require, "src.battle.BattleState")
+    if GameVersion.isYellow() and okB and type(BS) == "table" and type(BS.sgbBattlePals) == "function" then
+      local alt_pals = BS.sgbBattlePals
+      BS.sgbBattlePals = function(self, ...)
+        local t = alt_pals(self, ...)
+        if type(t) == "table" and P.usesYellowCgb() and not self.blackedOut then
+          local mew = P.pal(self.data, "MEWMON")
+          if mew then
+            if self.showPlayerBack or self.safari or self.demo then t[2] = mew end
+            if self.showEnemyTrainer then t[3] = mew end
+          end
+          -- solange in der Zeile der Gegner-KP die Team-Bälle stehen (Trainerbild beim Kampfbeginn, ReplaceFaintedEnemyMon
+          -- mit GetBattleHealthBarColor für volle KP), ist sie grün; der Port nimmt die KP-Anzeige des Pokémon davor
+          local gruen = (self.showEnemyTrainer or self.showEnemyBalls) and P.pal(self.data, "GREENBAR")
+          if gruen then t[1] = gruen end
+        end
+        return t
+      end
+    end
+    -- Heilmaschine im Pokémon-Center (Farben „OG RED“/„OG BLUE“): die Bälle und der Monitor sind Sprites mit OBP1;
+    -- die Boot-ROM des Game Boy Color legt auf OBP1 die Hintergrundpalette (DE-ROM: Bälle blau bzw. rot).  Der Port
+    -- färbt sie mit der Objektpalette OBP0 (OverworldController healMachineShader: PaletteFX.ogObj, umgestellt mit
+    -- der OBP1-Tabelle der Maschine) → bei diesen beiden Umstellungen die Hintergrundpalette nehmen
+    local alt_permute = P.permute
+    local function maschine(map)
+      return type(map) == "table" and map[0] == 0 and map[3] == 3
+        and ((map[1] == 0 and map[2] == 2) or (map[1] == 2 and map[2] == 0))
+    end
+    P.permute = function(colors, map, ...)
+      if P.usesSpriteObp() and maschine(map) and colors == P.ogObj() then colors = P.ogBg() end
+      return alt_permute(colors, map, ...)
+    end
+    local okS, SM = pcall(require, "src.ui.SlotMachine")
+    local okR, SR = pcall(require, "src.render.SpriteRenderer")
+    if not (okS and okR and type(SM) == "table" and type(SM.drawReels) == "function"
+        and type(SR.obpImage) == "function" and type(P.markUiSpriteRedraw) == "function") then return end
+    local original = SM.drawReels
+    SM.drawReels = function(self, art, ...)
+      if not (P.usesSpriteObp() and type(art) == "table" and art.sheet and self.symbolImg) then
+        return original(self, art, ...)
+      end
+      local blau = GameVersion.isBlue and GameVersion.isBlue()
+      local obj = SR.obpImage(art.sheet, blau and P.GBC_OBJ_BLUE or P.ogObjBase(), blau and "slotobj_blue" or "slotobj")
+      local zeichne = love.graphics.draw
+      return ersetzt({ { love.graphics, "draw", function(bild, quad, x, y, ...)
+        local r = zeichne(bild, quad, x, y, ...)
+        if bild == self.symbolImg and obj then P.markUiSpriteRedraw(obj, quad, x, y) end
+        return r
+      end } }, original, self, art, ...)
+    end
+  end
+
   -- ================================================================ Haken: Bildschirme
 
   -- Trainerpass: TrainerInfo_BadgesText ist in beiden ROMs „●<Wort>●“ ab Spalte 6, Zeile 9 (start_sub_menus.asm).
@@ -1172,6 +1435,41 @@ return function(mod, MODVERSION)
     end)
   end
 
+  -- Länge eines Schreis in Frames (PlayCry → WaitForSoundToFinish): Dauer der Tonquelle des Ports, an der DE-ROM
+  -- geprüft (GLURAK 55 Frames: A nach 52 Frames noch ohne Wirkung, nach 56 angenommen)
+  local function schrei_frames(src)
+    local okd, dauer = pcall(src.getDuration, src)
+    local okp, hoehe = pcall(src.getPitch, src)
+    if not okd or type(dauer) ~= "number" or dauer <= 0 then return 0 end
+    if okp and type(hoehe) == "number" and hoehe > 0 then dauer = dauer / hoehe end
+    return math.floor(dauer * 60)
+  end
+
+  -- Pokédex-Eintrag: Größe, Gewicht und Text erscheinen, wenn der Schrei verklungen ist (PlayCry →
+  -- WaitForSoundToFinish, an der DE-ROM gemessen rund 81 Frames nach dem Öffnen bei BISASAM).  Der Port fragt dafür
+  -- das Abspielgerät (DexEntryMenu:crying, Source:isPlaying), das an der Wiedergabe in Echtzeit hängt → die Länge des
+  -- Schreis in Frames zählen
+  local function pokedex_schrei_einhaengen()
+    local ok, Dex = pcall(require, "src.ui.DexEntryMenu")
+    if not (ok and type(Dex) == "table" and type(Dex.crying) == "function" and type(Dex.update) == "function") then
+      return
+    end
+    local alt_update = Dex.update
+    Dex.update = function(self, ...)
+      local vorher = self.crySrc
+      local r = alt_update(self, ...)
+      if self.crySrc and self.crySrc ~= vorher then self.dgmSchrei = schrei_frames(self.crySrc) end
+      if (self.dgmSchrei or 0) > 0 then self.dgmSchrei = self.dgmSchrei - 1 end
+      return r
+    end
+    Dex.crying = function(self)
+      if not self.crySrc then return false end
+      if (self.dgmSchrei or 0) > 0 then return true end
+      self.crySrc = nil
+      return false
+    end
+  end
+
   -- Statusseite 2: EN setzt vor die AP-Werte zweimal die Kachel $72 („PP“, status_screen.asm PrintPP), die DE-ROM
   -- die Schriftzeichen $80 $8F „AP“ (ld a,$80 / ld [hli],a / ld a,$8F / ld [hld],a).  Der Port übernimmt die
   -- EN-Kacheln (SummaryMenu.lua) → während der Statusseite die beiden $72-Kacheln durch die DE-Zeichen ersetzen
@@ -1192,6 +1490,124 @@ return function(mod, MODVERSION)
         end } }, alt_draw, self, ...)
       end
     end)
+  end
+
+  -- Team-Menü, Untermenü der Feldattacken: das Original setzt den Kasten nach der linkesten Kachel der Attacken-
+  -- namen (FieldMoveDisplayData, Spalte je Attacke; DE z. B. ZERSCHNEIDER ab Spalte 6), der Port nach der EN-Tabelle
+  -- (src/ui/PartyMenu.lua FIELD_MOVE_X) → Kasten, Zeilen und Cursor auf die DE-Spalte.  Wird eine Feldattacke
+  -- gewählt, stellt StartMenu_Pokemon vorher die Teamliste wieder her (LoadScreenTilesFromBuffer1), auch wenn sie
+  -- dann abgelehnt wird (z. B. „Hier kann nicht … SURFER“; danach .loop zurück zur Teamliste).  Der Port lässt das
+  -- Untermenü hinter der Meldung offen → Untermenü schließen, Cursor hohl, bis die Meldung weg ist.
+  local function teammenue_einhaengen(spalten)
+    local ok, PM = pcall(require, "src.ui.PartyMenu")
+    if not (ok and type(PM) == "table" and type(PM.draw) == "function" and type(PM.update) == "function") then
+      return
+    end
+    local Font = require("src.render.Font")
+    local function feld(entry)
+      return type(entry) == "table" and spalten[entry.move or entry.action] and true or false
+    end
+    local alt_draw = PM.draw
+    PM.draw = function(self, ...)
+      if not (self.submenu and type(self.subItems) == "table") then return alt_draw(self, ...) end
+      local lx = 12
+      for _, e in ipairs(self.subItems) do
+        local s = type(e) == "table" and spalten[e.move or e.action]
+        if s and s < lx then lx = s end
+      end
+      local n = #self.subItems
+      local oben = n > 3 and math.max(0, 16 - n * 2) or 11
+      -- nach dem Kasten zeichnet draw nur noch Zeilen und Cursor des Untermenüs (Font.draw über Font.drawCode)
+      local db, dc, schub = Font.drawBox, Font.drawCode, nil
+      return ersetzt({
+        { Font, "drawBox", function(tx, ty, tw, th, ...)
+          if ty == oben and tx + tw == 20 and ty + th == 18 then
+            local r = db(lx - 1, ty, 21 - lx, th, ...)
+            schub = (lx - tx - 1) * 8
+            return r
+          end
+          return db(tx, ty, tw, th, ...)
+        end },
+        { Font, "drawCode", function(code, x, y, ...)
+          if schub then x = x + schub end
+          return dc(code, x, y, ...)
+        end },
+      }, alt_draw, self, ...)
+    end
+    local alt_update = PM.update
+    PM.update = function(self, ...)
+      local gewaehlt = self.submenu and type(self.subItems) == "table" and self.subItems[self.subIndex]
+      local r = alt_update(self, ...)
+      local top = self.game.stack:top()
+      if feld(gewaehlt) and self.submenu and top ~= self and type(top) == "table" and top.pages then
+        self.submenu, self.subIndex, self.chosenHollow = nil, 1, true
+        local fertig = top.onDone
+        top.onDone = function(...)
+          self.chosenHollow = nil
+          if fertig then return fertig(...) end
+        end
+      end
+      return r
+    end
+  end
+
+  -- Fliegen-Karte: vor dem Ortsnamen steht ToText; die DE-ROM schreibt dort Code $70, im Original die Kachel $70 der
+  -- Kampf-/Statuskacheln (HpBarAndStatusGraphics ab $62, DE ein Pfeil „➔“).  Der Port zeichnet den Code mit der Schrift
+  -- (dort ein Anführungszeichen) → in der Kopfzeile der Fliegen-Karte die Kachel aus font_battle_extra
+  local function flugkarte_einhaengen()
+    local ok, TM = pcall(require, "src.ui.TownMap")
+    if not (ok and type(TM) == "table" and type(TM.draw) == "function") then return end
+    local Font = require("src.render.Font")
+    local Hud = require("src.render.HudTiles")
+    local original = TM.draw
+    TM.draw = function(self, ...)
+      if not self.fly then return original(self, ...) end
+      local dc = Font.drawCode
+      return ersetzt({ { Font, "drawCode", function(code, x, y, ...)
+        if code == 0x70 and y == 0 then return weiss(Hud.namingTile, code, x, y) end
+        return dc(code, x, y, ...)
+      end } }, original, self, ...)
+    end
+  end
+
+  -- PC, Ruhmeshalle (LeaguePCShowMon): je Eintrag blendet das Original weiß aus (GBPalWhiteOutWithDelay3,
+  -- ClearScreen, Bild laden; an der DE-ROM gemessen 56 Frames), zeigt dann den Eintrag, spielt den Schrei und wartet,
+  -- bis er verklungen ist (PlayCry → WaitForSoundToFinish); erst danach nimmt es A an (WaitForTextScrollButtonPress).
+  -- Der Port zeigt mit jedem A sofort den nächsten Eintrag (src/ui/LeaguePC.lua update) → Weißblende, Schrei danach,
+  -- Tasten erst nach dem Schrei
+  local RUHMESHALLE_WEISS = 56
+  local function ruhmeshalle_pc_einhaengen()
+    local ok, LP = pcall(require, "src.ui.LeaguePC")
+    if not (ok and type(LP) == "table" and type(LP.loadMon) == "function" and type(LP.update) == "function"
+        and type(LP.draw) == "function") then return end
+    local Sound = require("src.core.Sound")
+    local alt_load, alt_update, alt_draw = LP.loadMon, LP.update, LP.draw
+    LP.loadMon = function(self, ...)
+      local schrei
+      local r = ersetzt({ { Sound, "playCry", function(...) schrei = { ... } end } }, alt_load, self, ...)
+      self.dgmWeiss, self.dgmSchrei, self.dgmArt = RUHMESHALLE_WEISS, nil, schrei
+      return r
+    end
+    LP.update = function(self, ...)
+      if (self.dgmWeiss or 0) > 0 then
+        self.dgmWeiss = self.dgmWeiss - 1
+        if self.dgmWeiss == 0 and self.dgmArt then
+          local src = Sound.playCry(unpack(self.dgmArt))
+          self.dgmSchrei = src and schrei_frames(src) or 0
+        end
+        return
+      end
+      if (self.dgmSchrei or 0) > 0 then
+        self.dgmSchrei = self.dgmSchrei - 1
+        return
+      end
+      return alt_update(self, ...)
+    end
+    LP.draw = function(self, ...)
+      if (self.dgmWeiss or 0) <= 0 then return alt_draw(self, ...) end
+      love.graphics.setColor(1, 1, 1, 1)
+      love.graphics.rectangle("fill", 0, 0, 160, 144)
+    end
   end
 
   -- Ladebericht (Port-Zusatz, src/ui/QuarantineReport.lua, nur Gen 1 zeigt ihn): erscheint einmal nach dem Laden,
@@ -1270,6 +1686,627 @@ return function(mod, MODVERSION)
     end)
   end
 
+  -- Gelb, PIKACHU hinter dem Spieler: eine Richtung zu PIKACHU dreht zunächst nur, erst wenn sie lange genug gehalten
+  -- wird, tauscht der Spieler den Platz (wPikachuCollisionCounter, home/overworld.asm).  An der DE-ROM gemessen
+  -- beginnt der Schritt nach 19 Frames Halten (12 Frames: nur drehen); der Port setzt den Zähler auf 8 (PikachuFollower
+  -- tickCollisionCounter) und läuft schon nach rund 10 Frames → Startwert so, dass er wie die ROM nach 19 Frames läuft
+  local PIKACHU_HALTEN = 18
+  local function pikachu_halten_einhaengen()
+    if not (GameVersion.isYellow and GameVersion.isYellow()) then return end
+    local ok, PF = pcall(require, "src.world.PikachuFollower")
+    if not (ok and type(PF) == "table" and type(PF.update) == "function") then return end
+    local original = PF.update
+    PF.update = function(game, ow, ...)
+      local vorher = type(ow) == "table" and ow.pikachuCollisionCounter
+      local r = original(game, ow, ...)
+      if type(ow) == "table" and ow.pikachuCollisionCounter == 8 and vorher ~= 8 then
+        ow.pikachuCollisionCounter = PIKACHU_HALTEN
+      end
+      return r
+    end
+  end
+
+  -- Gelb, PIKACHU und Textfenster: PIKACHU ist ein Sprite mit eigener Verwaltung (pikachu_follow.asm), das das
+  -- Original beim Textfenster nicht ausblendet; es ragt über Fenster und Rahmen.  Der Port zeichnet die Figuren der
+  -- Karte unter die Oberfläche → nach einem Textfenster direkt über der Karte PIKACHU noch einmal darüber zeichnen
+  local function pikachu_vorn_einhaengen()
+    if not (GameVersion.isYellow and GameVersion.isYellow()) then return end
+    local TextBox = require("src.render.TextBox")
+    local original = TextBox.draw
+    TextBox.draw = function(self, ...)
+      local r = original(self, ...)
+      local game = self.game
+      local ow = type(game) == "table" and game.overworld
+      local rd = type(game) == "table" and game.renderer
+      if not (type(ow) == "table" and ow.camera and rd and rd.worldViewSize and game.stack) then return r end
+      -- nur ein Textfenster direkt über der Karte (nicht über Menüs, Beutel oder Kampf)
+      local st = game.stack.states or {}
+      local unter
+      for i, s in ipairs(st) do
+        if s == self then unter = st[i - 1] end
+      end
+      if unter ~= ow then return r end
+      -- die Kartenansicht ist um den Bildschirm von 160×144 zentriert (größer, wenn das Fenster mehr Karte zeigt)
+      local vw, vh = rd:worldViewSize()
+      local cx = ow.camera.x + ((vw or 160) - 160) / 2
+      local cy = ow.camera.y + ((vh or 144) - 144) / 2
+      for _, e in ipairs(ow.entities or {}) do
+        if type(e) == "table" and e.pikachuFollower and type(e.draw) == "function" then
+          love.graphics.setColor(1, 1, 1, 1)
+          pcall(e.draw, e, cx, cy)
+        end
+      end
+      return r
+    end
+  end
+
+  -- Gelb, PIKACHU ansprechen (TalkToPikachu, engine/pikachu/pikachu_emotions.asm und pikachu_pic_animation.asm): der
+  -- Port spielt die Emotion sofort, wartet beim Schrei so lange, wie die WAV-Datei dauert (ohne Tonausgabe gar nicht),
+  -- und zeigt Kasten und Bild im selben Frame.  An der DE-ROM gemessen (PyBoy, alle 32 Emotionen über einen Hook auf
+  -- LoadPikachuExpression erzwungen, Station 13):
+  --   DisplayTextID bis zum ersten Befehl der Emotion 20 Frames; Schrei (pcm): 3 × DelayFrame, dann die PCM-Aufnahme
+  --   bei gesperrten Interrupts (Bytes · 360 / 17556 Frames, Bild steht); Sprechblase 60 + 2 Frames;
+  --   LoadPikachuSpriteIntoVRAM (Unterbefehl 0) 6 Frames; Bild (pikapic): 5 Frames bis der Rahmen steht
+  --   (PlacePikapicTextBoxBorder), dann leerer Kasten, bis die Grafik entpackt ist (je Bildskript, Tabelle unten),
+  --   Bild 3 · Dauer + 3 Frames, mit Schrei im Bildskript stattdessen 5 Frames Bild, Schrei, dann 3 · Dauer;
+  --   danach 2 Frames leerer Kasten.  Nach dem Schließen fehlt PIKACHU 17 Frames (seine Kacheln hat das Bild
+  --   überschrieben, CloseTextDisplay lädt sie neu), außer die Emotion lädt sie selbst (Unterbefehl 2): 1 Frame
+  local PIKA_ANSPRECHEN, PIKA_PCM_VOR, PIKA_BLASE_NACH, PIKA_SPRITES = 20, 3, 2, 6
+  local PIKA_RAHMEN, PIKA_BILD_VOR_SCHREI, PIKA_NACH_LEER, PIKA_VERBORGEN = 5, 5, 2, 17
+  -- Emotionen aus Kartenskripten (Fanclub, Bills Haus) laufen in der ROM ebenso über DisplayTextID und CloseTextDisplay:
+  -- 20 Frames Pause davor; danach fehlt der Spieler (seine Kacheln hat das Bild überschrieben), PIKACHU bleibt neben dem
+  -- Kasten zu sehen.  Im Fanclub gemessen (DE-ROM, Station 78 mit Skript 0, wShadowOAM): Pause 21, Spieler wieder da
+  -- 22 Frames nach dem leeren Kasten; in Bills Haus lädt Unterbefehl 2 die Kacheln gleich wieder (1 Frame)
+  local PIKA_VERBORGEN_FANCLUB = 20
+  local PIKA_AUFBAU_STANDARD = 41
+  local PIKA_AUFBAU = {
+    [1] = 39, [2] = 40, [3] = 42, [4] = 41, [5] = 41, [6] = 38, [7] = 42, [8] = 43, [9] = 41, [10] = 45,
+    [11] = 41, [12] = 42, [13] = 45, [14] = 42, [15] = 42, [16] = 42, [17] = 44, [18] = 21, [19] = 42, [20] = 42,
+    [21] = 57, [22] = 24, [23] = 21, [24] = 24, [25] = 45, [26] = 49, [27] = 41, [28] = 41,
+  }
+  local function pikachu_bild_einhaengen(schreie)
+    if not (GameVersion.isYellow and GameVersion.isYellow() and type(schreie) == "table") then return end
+    local okp, PF = pcall(require, "src.world.PikachuFollower")
+    local oko, OW = pcall(require, "src.world.OverworldController")
+    if not (okp and oko and type(PF.talk) == "function" and type(OW.update) == "function") then return end
+    local Sound = require("src.core.Sound")
+    local gesehen = setmetatable({}, { __mode = "k" })
+    local schrei, emotion   -- letzter Schrei aus PikachuFollower, zuletzt gelesene Emotion
+    local im_gespraech      -- PF.talk läuft (sonst kommt eine neue Emotion aus einem Kartenskript)
+    local skript_emotion    -- eben gelesene Emotion eines Kartenskripts, ihr erster Abschnitt folgt im selben Schritt
+    local info = {}         -- je Emotion: zeigt sie ein Bild, lädt sie die Kacheln danach selbst?
+    local bild_id = {}      -- Bildpfad → Nummer des Bildskripts
+
+    local function pcm_frames(n) return (schreie[n] or 0) * 360 / 17556 end
+    local function ton(src, was)
+      local ok, f = pcall(function() return src[was] end)
+      if ok and type(f) == "function" then pcall(f, src) end
+    end
+    local function stufe(ow, npc, frames, bild, weiter, leer)
+      local t = { npc = npc, frames = frames, bubble = false, pikaPic = bild,
+                  pikaBlankAt = leer and math.huge or nil, onDone = weiter }
+      gesehen[t] = true
+      return t
+    end
+    local function folge(ow, ziel) return function() ow.emote = ziel end end
+    -- PIKACHU bzw. der Spieler unsichtbar (die Bildgrafik belegt die Kacheln) bzw. wieder sichtbar
+    local function verbergen(npc)
+      if npc.dgmZeichnen ~= nil then return end
+      npc.dgmZeichnen = rawget(npc, "draw") or false
+      npc.draw = function() end
+    end
+    local function zeigen(npc)
+      if npc.dgmZeichnen == nil then return end
+      npc.draw = npc.dgmZeichnen or nil
+      npc.dgmZeichnen = nil
+    end
+
+    -- Skripte der Emotionen einmal nach der ROM ergänzen; die Leseschnittstelle merkt sich, welche gerade beginnt
+    local function vorbereiten()
+      local Game = require("src.core.Game")
+      local field = type(Game) == "table" and Game.data and Game.data.field
+      local pd = field and field.pikachu
+      if type(pd) ~= "table" or pd.dgmVorbereitet or type(pd.emotions) ~= "table" then return end
+      pd.dgmVorbereitet = true
+      for id, p in pairs(pd.pics or {}) do
+        if type(p) == "table" and p.image then bild_id[p.image] = id end
+      end
+      local echt = pd.emotions
+      for id, skript in pairs(echt) do
+        local neu, bild, neuladen = {}, false, false
+        for _, s in ipairs(skript) do
+          if s.op == "subcmd" and s.sub == 0 then
+            neu[#neu + 1] = { op = "delay", frames = PIKA_SPRITES }
+          else
+            neu[#neu + 1] = s
+            if s.op == "bubble" then neu[#neu + 1] = { op = "delay", frames = PIKA_BLASE_NACH } end
+            if s.op == "pikapic" then bild = true end
+            if s.op == "subcmd" and s.sub == 2 and bild then neuladen = true end
+          end
+        end
+        echt[id] = neu
+        info[id] = { bild = bild, neuladen = neuladen }
+      end
+      pd.emotions = setmetatable({}, { __index = function(_, k)
+        emotion = k
+        if not im_gespraech then skript_emotion = k end
+        return echt[k]
+      end })
+    end
+
+    -- neuer Abschnitt einer Emotion (ow.emote): Zeiten wie die ROM
+    local function neu(ow, e, s)
+      gesehen[e] = true
+      local npc = e.npc
+      if not (type(npc) == "table" and npc.pikachuFollower) then return end
+      if e.pikaPic then
+        local aufbau = PIKA_AUFBAU[bild_id[e.pikaPic]] or PIKA_AUFBAU_STANDARD
+        local function vorlauf(ziel)
+          ow.emote = stufe(ow, npc, PIKA_RAHMEN, nil, function()
+            ow.emote = stufe(ow, npc, aufbau, e.pikaPic, folge(ow, ziel), true)
+          end)
+        end
+        if e.pikaSeq then
+          -- das Bild läuft; nach dem Ende 2 Frames leerer Kasten; bei einem Kartenskript fehlt danach noch der Spieler
+          -- (CloseTextDisplay), beim Ansprechen PIKACHU (PF.talk)
+          local fertig = e.onDone
+          local function weiter() if fertig then return fertig() end end
+          e.onDone = function()
+            ow.emote = stufe(ow, npc, PIKA_NACH_LEER, e.pikaPic, function()
+              local sk = ow.dgmSkript
+              ow.dgmSkript = nil
+              local spieler = ow.player
+              if not (sk and spieler) then return weiter() end
+              local inf = info[sk.id] or {}
+              local n = inf.neuladen and 1 or (sk.karte == "POKEMON_FAN_CLUB" and PIKA_VERBORGEN_FANCLUB or PIKA_VERBORGEN)
+              verbergen(spieler)
+              ow.emote = stufe(ow, npc, n, nil, function()
+                zeigen(spieler)
+                return weiter()
+              end)
+            end, true)
+          end
+          if ow.dgmBildSchrei == e.pikaPic then
+            ow.dgmBildSchrei = nil
+          else
+            e.frames, e.pikaTotal = e.frames + 3, (e.pikaTotal or e.frames) + 3
+            vorlauf(e)
+          end
+        else
+          -- Schrei im Bildskript: erst Rahmen und Aufbau, 5 Frames Bild, dann der Schrei
+          ow.dgmBildSchrei = e.pikaPic
+          if s then
+            ton(s.src, "stop")
+            e.frames = math.ceil(pcm_frames(s.n)) + 1
+            e.dgmSpielen = s.src
+          end
+          vorlauf(stufe(ow, npc, PIKA_BILD_VOR_SCHREI, e.pikaPic, folge(ow, e)))
+        end
+      elseif s and e.bubble == false then
+        e.frames = PIKA_PCM_VOR + math.floor(pcm_frames(s.n))
+      end
+    end
+
+    -- erster Abschnitt einer Emotion: davor die 20 Frames von DisplayTextID; ein Schrei als erster Befehl erklingt erst
+    -- danach
+    local function vorspann(ow, erst, s)
+      neu(ow, erst, s)
+      local kopf = ow.emote
+      if s and kopf == erst and not erst.pikaPic then
+        ton(s.src, "stop")
+        erst.dgmSpielen = s.src
+      end
+      ow.emote = stufe(ow, erst.npc, PIKA_ANSPRECHEN, nil, folge(ow, kopf))
+    end
+
+    -- Schreie auf der Karte merken (der nächste neue Abschnitt einer Emotion gehört dazu); ohne Tonausgabe gibt der
+    -- Port nil zurück und überspringt die Pause, die ROM wartet trotzdem → dann eine stumme Ersatzquelle
+    local in_karte = 0
+    local STUMM = setmetatable({}, { __index = function() return function() return false end end })
+    local alt_schrei = Sound.playPikaCry
+    Sound.playPikaCry = function(data, n, ...)
+      local src = alt_schrei(data, n, ...)
+      if in_karte <= 0 then return src end
+      if src == nil then src = setmetatable({}, getmetatable(STUMM)) end
+      schrei = { n = n, src = src }
+      return src
+    end
+    local function auf_karte(f, ...)
+      in_karte = in_karte + 1
+      local ok, r = pcall(f, ...)
+      in_karte = in_karte - 1
+      if not ok then error(r, 0) end
+      return r
+    end
+
+    -- vor und nach jedem Schritt der Karte: ein neuer Abschnitt wird umgestellt, bevor er gezeichnet wird
+    local function pruefen(ow)
+      local e = ow.emote
+      if type(e) == "table" and e ~= ow.dgmEmoteAktiv then
+        if not gesehen[e] then
+          if skript_emotion and type(e.npc) == "table" and e.npc.pikachuFollower then
+            ow.dgmSkript = { id = skript_emotion, karte = ow.map and ow.map.id }
+            vorspann(ow, e, schrei)
+          else
+            neu(ow, e, schrei)
+          end
+          e = ow.emote
+        end
+        ow.dgmEmoteAktiv = e
+        if e.dgmSpielen then ton(e.dgmSpielen, "play"); e.dgmSpielen = nil end
+      end
+      schrei, skript_emotion = nil, nil
+    end
+    -- Sprünge in einer Emotion (engine/pikachu/pikachu_movement.asm): die ROM setzt die Höhe in die Spritedaten, nachdem
+    -- die OAM für diesen Frame schon gebaut ist → PIKACHU steht einen Frame später auf der neuen Höhe; der Schatten
+    -- (eigenes OAM-Sprite) erscheint sofort und verschwindet erst mit der Landung.  Gemessen an der DE-ROM (wShadowOAM,
+    -- Emotion 4): Schatten ab Frame 29, Höhe ab 30 (Port 29), wieder unten und ohne Schatten bei 60 (Port 59)
+    local function sprung_merken(ow)
+      local npc = type(PF.current) == "function" and PF.current(ow)
+      local e = ow.emote
+      if not (npc and type(e) == "table" and e.npc == npc) then
+        ow.dgmSprungVor, ow.dgmSprungZeige = nil, nil
+        return
+      end
+      local vor = ow.dgmSprungVor
+      ow.dgmSprungVor = { py = npc.py, schatten = npc.hopShadowY }
+      ow.dgmSprungZeige = vor and { npc = npc, py = vor.py, schatten = npc.hopShadowY or vor.schatten } or nil
+    end
+    local alt_update = OW.update
+    OW.update = function(self, ...)
+      vorbereiten()
+      pruefen(self)
+      local r = auf_karte(alt_update, self, ...)
+      pruefen(self)
+      sprung_merken(self)
+      return r
+    end
+    if type(OW.draw) == "function" then
+      local alt_draw = OW.draw
+      OW.draw = function(self, ...)
+        local z = self.dgmSprungZeige
+        if not z then return alt_draw(self, ...) end
+        local npc = z.npc
+        local py, schatten = npc.py, npc.hopShadowY
+        npc.py, npc.hopShadowY = z.py, z.schatten
+        local ok, r = pcall(alt_draw, self, ...)
+        npc.py, npc.hopShadowY = py, schatten
+        if not ok then error(r, 0) end
+        return r
+      end
+    end
+
+    local alt_talk = PF.talk
+    PF.talk = function(game, ow, npc, done, ...)
+      vorbereiten()
+      schrei, emotion = nil, nil
+      ow.dgmSkript = nil
+      local id
+      local function ende()
+        local inf = info[id]
+        if not (inf and inf.bild) then
+          if done then return done() end
+          return
+        end
+        verbergen(npc)
+        ow.emote = stufe(ow, npc, inf.neuladen and 1 or PIKA_VERBORGEN, nil, function()
+          zeigen(npc)
+          if done then return done() end
+        end)
+      end
+      im_gespraech = true
+      local ok, r = pcall(auf_karte, alt_talk, game, ow, npc, ende, ...)
+      im_gespraech = false
+      if not ok then error(r, 0) end
+      id = emotion
+      local erst = ow.emote
+      if type(erst) ~= "table" or gesehen[erst] then return r end
+      local s = schrei
+      schrei = nil
+      vorspann(ow, erst, s)
+      return r
+    end
+  end
+
+  -- Gelb, Pokémon-Fanclub (scripts/PokemonFanClub.asm): nach der ersten PIKACHU-Szene steht
+  -- wPokemonFanClubCurScript auf SCRIPT1, und PokemonFanClubScript1 startet sie beim Betreten nur noch, wenn
+  -- Random < 10 percent ist (DE-ROM: „cp $19“, 25 von 256).  Der Port kennt den Skriptzustand nicht und spielt die
+  -- Szene jedes Mal (PikachuFollower.onFanClubEntered).  Zustand im Spielstand (dgmFanclubSkript); bei importierten
+  -- Spielständen aus dem SRAM-Abbild (sMainData + 771, DE wram $D5FE − $D2FB) gelesen und beim Export zurückgeschrieben
+  local FANCLUB_SKRIPT, FANCLUB_ZUFALL = 771, 25
+  local function fanclub_einhaengen()
+    if not (GameVersion.isYellow and GameVersion.isYellow()) then return end
+    local okp, PF = pcall(require, "src.world.PikachuFollower")
+    local okg, GenSave = pcall(require, "src.save_convert.GenSave")
+    if not (okp and okg and type(PF.onFanClubEntered) == "function" and GenSave.OFFSETS) then return end
+    local stelle = GenSave.OFFSETS.mainData + FANCLUB_SKRIPT
+    local function skript(save)
+      if save.dgmFanclubSkript ~= nil then return save.dgmFanclubSkript end
+      local roh = save.rawImport
+      if type(roh) == "string" and #roh == GenSave.SAVE_SIZE then return roh:byte(stelle + 1) == 1 and 1 or 0 end
+      return 0
+    end
+    local alt = PF.onFanClubEntered
+    PF.onFanClubEntered = function(game, ow, ...)
+      local save = game and game.save
+      if type(save) == "table" and ow and ow.map and ow.map.id == "POKEMON_FAN_CLUB"
+          and not save.pikachuMapScriptActive and skript(save) == 1
+          and love.math.random(0, 255) >= FANCLUB_ZUFALL then
+        save.pikachuMapScriptActive = true
+        return
+      end
+      local r = alt(game, ow, ...)
+      if type(save) == "table" and ow and ow.pikachuFanClubScene then save.dgmFanclubSkript = 1 end
+      return r
+    end
+    local alt_encode = GenSave.encode
+    GenSave.encode = function(save, data, template, ...)
+      local wert = type(save) == "table" and save.dgmFanclubSkript
+      local quelle = template or (type(save) == "table" and save.rawImport)
+      if wert and type(quelle) == "string" and #quelle == GenSave.SAVE_SIZE then
+        template = quelle:sub(1, stelle) .. string.char(wert) .. quelle:sub(stelle + 2)
+      end
+      return alt_encode(save, data, template, ...)
+    end
+  end
+
+  -- Gelb, PIKACHU nach WEITER (engine/pikachu/pikachu_follow.asm): Spritedaten (Platz 15) und Folgepuffer
+  -- (wPikachuFollowCommandBuffer, in sMainData) kommen aus dem Spielstand; die ROM lässt PIKACHU an der gesicherten
+  -- Stelle mit dem gesicherten Blick.  Der Port setzt es auf das Feld des Spielers.  Beim Sichern steht im Puffer
+  -- ein Befehl von PIKACHU zum Spieler (RefreshPikachuFollow im Startmenü, ComputePikachuFollowCommand: Zeile vor
+  -- Spalte, ab 2 Feldern Abstand ein Doppelschritt) oder nichts, wenn es auf dem Spielerfeld steht.  Jeder Schritt
+  -- des Spielers hängt seine Richtung an (QueuePikachuFollowCommand), und GetNextPikachuFollowCommand holt erst,
+  -- wenn zwei Befehle liegen, den ältesten.  An der DE-ROM gemessen: neben/hinter dem Spieler läuft PIKACHU beim
+  -- ersten Schritt auf dessen altes Feld, auf dem Spielerfeld bleibt es stehen (ohne sich umzudrehen), diagonal geht
+  -- es nur die Zeile und bleibt danach eine Spalte versetzt, aus 2+ Feldern Abstand macht es einen Doppelschritt
+  -- (2 Felder in einem Schritt) und bleibt versetzt.  Der Mod spielt den Puffer nach, bis er dem Folgen des Ports
+  -- entspricht (genau ein Befehl, der auf das Spielerfeld führt); ein Text oder Menü füllt ihn wie
+  -- RefreshPikachuFollow neu.  Zustand im Spielstand (dgmPikachu); bei importierten Spielständen aus dem
+  -- SRAM-Abbild gelesen (sSpriteData Platz 15, sMainData + 320: Puffergröße, + 321: Befehle), beim Export
+  -- zurückgeschrieben.
+  local PIKA_PUFFER, PIKA_Y, PIKA_X, PIKA_KARTE = 320, 106, 107, 103
+  local PIKA_BLICK = { [0] = "down", [4] = "up", [8] = "left", [12] = "right" }
+  local PIKA_BLICK_BYTE = { down = 0, up = 4, left = 8, right = 12 }
+  local PIKA_VEKTOR = { { 0, 1 }, { 0, -1 }, { -1, 0 }, { 1, 0 } }   -- Befehle 1-4: unten, oben, links, rechts
+  local function pika_vektor(c)
+    local d, n = PIKA_VEKTOR[(c - 1) % 4 + 1], c > 4 and 2 or 1
+    return d[1] * n, d[2] * n
+  end
+  -- ComputePikachuFollowCommand: Befehl von PIKACHU (kx, ky) zum Spieler (x, y), nil auf dem Spielerfeld
+  local function pika_befehl(kx, ky, x, y)
+    local dy, dx = y - ky, x - kx
+    if dy ~= 0 then return (math.abs(dy) < 2 and 0 or 4) + (dy > 0 and 1 or 2) end
+    if dx == 0 then return nil end
+    return (math.abs(dx) < 2 and 0 or 4) + (dx < 0 and 3 or 4)
+  end
+  local function pikachu_laden_einhaengen()
+    if not (GameVersion.isYellow and GameVersion.isYellow()) then return end
+    local okp, PF = pcall(require, "src.world.PikachuFollower")
+    local okg, GenSave = pcall(require, "src.save_convert.GenSave")
+    local okm, Game = pcall(require, "src.core.Game")
+    local oks, StateStack = pcall(require, "src.core.StateStack")
+    if not (okp and okg and okm and oks and GenSave.OFFSETS and type(PF.update) == "function"
+        and type(PF.current) == "function" and type(Game.restoreSave) == "function"
+        and type(Game.writeSave) == "function" and type(StateStack.push) == "function") then return end
+    local O = GenSave.OFFSETS
+    local M, S1, S2 = O.mainData, O.spriteData + 0xF0, O.spriteData + 0x1F0
+    local function kartennr(data, karte)
+      local ok, cw = pcall(GenSave.crosswalks, data)
+      return ok and type(cw) == "table" and cw.mapsIndex and cw.mapsIndex[karte]
+    end
+
+    -- Lage aus einem importierten SRAM-Abbild (nur solange der Spieler noch auf dessen Feld steht)
+    local function aus_abbild(save, data)
+      local roh, p = save.rawImport, save.player
+      if not (type(roh) == "string" and #roh == GenSave.SAVE_SIZE and type(p) == "table") then return nil end
+      local function b(i) return roh:byte(i + 1) end
+      if b(S1) ~= 0x49 or b(S1 + 1) == 0 or not PIKA_BLICK[b(S1 + 9)] then return nil end
+      local nr = kartennr(data, p.map)
+      if not nr or b(M + PIKA_KARTE) ~= nr % 256 or b(M + PIKA_X) ~= p.x or b(M + PIKA_Y) ~= p.y then return nil end
+      local puffer, n = {}, b(M + PIKA_PUFFER)
+      if n ~= 0xFF then
+        for i = 0, math.min(n, 15) do
+          local c = b(M + PIKA_PUFFER + 1 + i)
+          if c < 1 or c > 8 then break end
+          puffer[#puffer + 1] = c
+        end
+      end
+      return { karte = p.map, x = p.x, y = p.y, kx = b(S2 + 5) - 4, ky = b(S2 + 4) - 4,
+               blick = PIKA_BLICK[b(S1 + 9)], puffer = puffer }
+    end
+
+    -- Übergabe an das Folgen des Ports, sobald der Puffer ihm entspricht
+    local function uebergabe(ow, npc, zx, zy)
+      local q = ow.dgmPikaPuffer
+      local gx, gy = npc.goalX or npc.cellX, npc.goalY or npc.cellY
+      if #q ~= 1 then return end
+      local dx, dy = pika_vektor(q[1])
+      if gx + dx == zx and gy + dy == zy then ow.dgmPikaPuffer, ow.dgmPikaLetzt = nil, nil end
+    end
+
+    local original_laden = Game.restoreSave
+    Game.restoreSave = function(self, loaded, ...)
+      local r = original_laden(self, loaded, ...)
+      local ow, save = self.overworld, self.save
+      local lage = type(save) == "table" and save.dgmPikachu
+      if lage == nil and type(save) == "table" then lage = aus_abbild(save, self.data) end
+      local npc = type(ow) == "table" and ow.player and PF.current(ow)
+      if type(lage) == "table" and npc and lage.karte == ow.map.id and lage.x == ow.player.cellX
+          and lage.y == ow.player.cellY then
+        npc.cellX, npc.cellY = lage.kx, lage.ky
+        npc.px, npc.py = lage.kx * 16, lage.ky * 16
+        npc.facing = lage.blick or npc.facing
+        npc.targetX, npc.targetY, npc.goalX, npc.goalY, npc.moving, npc.idle = nil, nil, nil, nil, false, nil
+        local q = {}
+        for i, c in ipairs(lage.puffer or {}) do q[i] = c end
+        ow.dgmPikaPuffer, ow.dgmPikaLetzt = q, { x = ow.player.cellX, y = ow.player.cellY }
+        ow.pikachuTrail = { x = ow.player.cellX, y = ow.player.cellY }
+        uebergabe(ow, npc, ow.player.cellX, ow.player.cellY)
+      end
+      return r
+    end
+
+    -- Sichern: Lage und Puffer wie nach RefreshPikachuFollow im Startmenü
+    local original_sichern = Game.writeSave
+    Game.writeSave = function(self, ...)
+      local ow, save = self.overworld, self.save
+      local npc = type(ow) == "table" and ow.player and PF.current(ow)
+      if type(save) == "table" then
+        save.dgmPikachu = false
+        if npc and not npc.moving then
+          local p = ow.player
+          local c = pika_befehl(npc.cellX, npc.cellY, p.cellX, p.cellY)
+          save.dgmPikachu = { karte = ow.map.id, x = p.cellX, y = p.cellY, kx = npc.cellX, ky = npc.cellY,
+                              blick = npc.facing, puffer = { c } }
+        end
+      end
+      return original_sichern(self, ...)
+    end
+
+    -- Verdeckt: HidePikachuIfOffScreen vergleicht im Ruhezustand mit wYCoord/wXCoord, die erst am Ende des
+    -- Spielerschritts weiterzählen → PIKACHU auf dem Spielerfeld bleibt während des ganzen ersten Schritts
+    -- unsichtbar (DE-ROM gemessen); der Port vergleicht mit dem Ziel des Schritts und zeigt es schon beim Losgehen
+    -- Unter dem Textfenster: CheckSpriteAvailability (engine/overworld/movement.asm) blendet ein Sprite ganz aus,
+    -- wenn eine der vier Kacheln seines Felds keine Kartenkachel ist (≥ MAP_TILESET_SIZE, also Fenster); so
+    -- verschwindet PIKACHU, das nach dem Laden zwei Felder unter dem Spieler steht (Station 82).  Sonst ragt es über
+    -- das Fenster (pikachu_vorn_einhaengen).
+    local function unter_fenster(ow, npc)
+      local st = Game.stack and Game.stack.states
+      local rd = Game.renderer
+      if type(st) ~= "table" or not (ow.camera and rd and rd.worldViewSize) then return false end
+      local vw, vh = rd:worldViewSize()
+      local sx = math.floor((npc.px - ow.camera.x - ((vw or 160) - 160) / 2) / 8)
+      local sy = math.floor((npc.py - ow.camera.y - ((vh or 144) - 144) / 2) / 8)
+      local ueber = false
+      for _, s in ipairs(st) do
+        if s == ow then ueber = true
+        elseif ueber and type(s) == "table" and s.boxTx and s.boxTy and s.boxTw and s.boxTh
+            and sx + 1 >= s.boxTx and sx < s.boxTx + s.boxTw and sy + 1 >= s.boxTy and sy < s.boxTy + s.boxTh then
+          return true
+        end
+      end
+      return false
+    end
+    if type(PF.underPlayer) == "function" then
+      PF.underPlayer = function(ow, npc)
+        local p = type(ow) == "table" and ow.player
+        if not (p and npc) then return false end
+        if unter_fenster(ow, npc) then return true end
+        if npc.moving then return false end
+        return npc.cellX == p.cellX and npc.cellY == p.cellY
+      end
+    end
+
+    -- Text oder Menü über der Karte: RefreshPikachuFollow
+    local original_push = StateStack.push
+    StateStack.push = function(self, ...)
+      local ow = Game.overworld
+      if type(ow) == "table" and ow.dgmPikaPuffer then ow.dgmPikaAuffrischen = true end
+      return original_push(self, ...)
+    end
+
+    -- neue Karte: der Port setzt PIKACHU neu, ein Übergang über eine Verbindung verschiebt nur die Koordinaten
+    local original_karte = PF.onMapEntered
+    PF.onMapEntered = function(game, ow, opts, ...)
+      if type(ow) == "table" and not (opts and opts.keepPikachu) then ow.dgmPikaPuffer, ow.dgmPikaLetzt = nil, nil end
+      return original_karte(game, ow, opts, ...)
+    end
+    local original_rebase = PF.rebase
+    PF.rebase = function(ow, dx, dy, ...)
+      local l = type(ow) == "table" and ow.dgmPikaLetzt
+      if l then l.x, l.y = l.x + dx, l.y + dy end
+      return original_rebase(ow, dx, dy, ...)
+    end
+
+    local original_folgen = PF.update
+    PF.update = function(game, ow, ...)
+      local q = type(ow) == "table" and ow.dgmPikaPuffer
+      local npc = q and not ow.pikaHop and PF.current(ow)
+      if not npc or PF.isFollowingDisabled(ow) then return original_folgen(game, ow, ...) end
+      local p = ow.player
+      local zx, zy = p.targetX or p.cellX, p.targetY or p.cellY
+      local l = ow.dgmPikaLetzt
+      if ow.dgmPikaAuffrischen and not npc.moving then
+        ow.dgmPikaAuffrischen = nil
+        q = { pika_befehl(npc.cellX, npc.cellY, zx, zy) }
+        ow.dgmPikaPuffer = q
+      end
+      -- QueuePikachuFollowCommand: der Schritt des Spielers wird beim Losgehen angehängt
+      if zx ~= l.x or zy ~= l.y then
+        q[#q + 1] = zy > l.y and 1 or zy < l.y and 2 or zx < l.x and 3 or 4
+        l.x, l.y = zx, zy
+      end
+      -- PikachuMovementState_ProcessCommand: ab zwei Befehlen den ältesten ausführen (Normal- oder Doppelschritt)
+      local steht = not npc.moving and (not npc.goalX or (npc.goalX == npc.cellX and npc.goalY == npc.cellY))
+      if steht and #q >= 2 then
+        local c = table.remove(q, 1)
+        local dx, dy = pika_vektor(c)
+        npc.idle = nil
+        npc.px, npc.py = npc.cellX * 16, npc.cellY * 16
+        npc.facing = PIKA_BLICK[((c - 1) % 4) * 4]
+        npc.targetX, npc.targetY = npc.cellX + dx, npc.cellY + dy
+        npc.goalX, npc.goalY = npc.targetX, npc.targetY
+        npc.hopStep = c > 4 or nil
+        npc.stepFrames = p.stepFramesCur or p.stepFrames or 16
+        npc.moving, npc.progress = true, 0
+        npc:update(ow.map, ow.entities)
+      end
+      uebergabe(ow, npc, zx, zy)
+      ow.pikachuTrail = { x = zx, y = zy }
+      return original_folgen(game, ow, ...)
+    end
+
+    -- Export: Platz 15 und Puffer ins SRAM-Abbild, danach die Prüfsumme neu
+    local original_encode = GenSave.encode
+    GenSave.encode = function(save, data, template, ...)
+      local out = original_encode(save, data, template, ...)
+      local lage = type(save) == "table" and save.dgmPikachu
+      local p = type(save) == "table" and save.player
+      if type(out) ~= "string" or #out ~= GenSave.SAVE_SIZE or type(lage) ~= "table" or type(p) ~= "table"
+          or lage.karte ~= p.map or lage.x ~= p.x or lage.y ~= p.y then return out end
+      local bytes = {}
+      for i = 1, #out, 4096 do
+        for j, v in ipairs({ out:byte(i, math.min(i + 4095, #out)) }) do bytes[i + j - 1] = v end
+      end
+      local function setze(i, v) bytes[i + 1] = v % 256 end
+      if bytes[S1 + 1] ~= 0x49 or bytes[S1 + 2] == 0 then
+        setze(S1, 0x49); setze(S2 + 6, 0xFE); setze(S2 + 14, 2)
+      end
+      local blick = PIKA_BLICK_BYTE[lage.blick] or 0
+      local auf_spieler = lage.kx == lage.x and lage.ky == lage.y
+      setze(S1 + 1, 1)
+      setze(S1 + 2, auf_spieler and 0xFF or 0x10 + blick)
+      setze(S1 + 3, 0); setze(S1 + 5, 0); setze(S1 + 7, 0); setze(S1 + 8, 0)
+      setze(S1 + 4, 0x3C + 16 * (lage.ky - lage.y))
+      setze(S1 + 6, 0x40 + 16 * (lage.kx - lage.x))
+      setze(S1 + 9, blick)
+      setze(S2 + 4, lage.ky + 4); setze(S2 + 5, lage.kx + 4)
+      local puffer = lage.puffer or {}
+      setze(M + PIKA_PUFFER, #puffer == 0 and 0xFF or #puffer - 1)
+      for i = 1, 16 do setze(M + PIKA_PUFFER + i, puffer[i] or 0) end
+      local summe = 0
+      for i = O.checksumStart, O.checksumEnd - 1 do summe = summe + bytes[i + 1] end
+      setze(O.mainChecksum, 255 - summe % 256)
+      local teile = {}
+      for i = 1, #bytes, 4096 do teile[#teile + 1] = string.char(unpack(bytes, i, math.min(i + 4095, #bytes))) end
+      return table.concat(teile)
+    end
+  end
+
+  -- Laden eines Spielstands: die zuletzt gewählte Zeile von Team-Menü und Beutel (wPartyAndBillsPCSavedMenuItem,
+  -- wBagSavedMenuItem) liegt im Original im WRAM und ist nach dem Neustart leer; der Port behält sie im Spielobjekt
+  -- über das Zurück zum Hauptmenü hinweg (Game.partyMenuSavedIndex, bagSavedMenuItem) → beim Laden zurücksetzen
+  local function laden_einhaengen()
+    local ok, Game = pcall(require, "src.core.Game")
+    if not (ok and type(Game) == "table" and type(Game.restoreSave) == "function") then return end
+    local original = Game.restoreSave
+    Game.restoreSave = function(self, ...)
+      self.partyMenuSavedIndex, self.bagSavedMenuItem = nil, nil
+      if type(self.overworld) == "table" then self.overworld.dgmStehtext = nil end
+      return original(self, ...)
+    end
+  end
+
   -- Spielautomat: drawBottom zeichnet ROM-Dialogzeilen als feste englische Literale (ohne Strings()).  Während
   -- drawBottom wird jede Zeile, die genau einer Zeile eines dieser Labels entspricht, durch dieselbe Zeile des
   -- deutschen Labels ersetzt (engine/slots/slot_machine.asm); Quelle bleibt die ROM.
@@ -1327,6 +2364,95 @@ return function(mod, MODVERSION)
     end
   end
 
+  -- Spielautomat, Textseiten der DE-ROM mit Fortsetzung (▼, dann eine Zeile hochrollen):
+  -- * BetHowManySlotMachineText „Wie viele Münzen / möchtest Du ▼ / setzen?“: PrintText wartet am ▼, erst danach
+  --   zeichnet MainSlotMachineLoop das Fenster ×3/×2/×1.  Der Port zeigt sofort das Menü (drawBottom, Stufe bet) →
+  --   vorher die erste Seite mit ▼ bis A/B; danach bleiben „möchtest Du / setzen?“ unter dem Menü
+  --   (automat_zeilen_einhaengen).
+  -- * LinedUpText „Super! Du hast / 15 Münzen ▼ / gewonnen!“: der Port setzt alles in zwei Zeilen → erste Seite mit
+  --   ▼, nach A/B die gerollte Seite „15 Münzen / gewonnen!“ (ohne Walzensymbol, es ist mit der Zeile weggerollt),
+  --   dann wie im Port WaitForTextScrollButtonPress und Auszahlung.
+  local function automat_seiten_einhaengen(de_text)
+    local ok, SM = pcall(require, "src.ui.SlotMachine")
+    if not (ok and type(SM) == "table" and type(SM.update) == "function" and type(SM.drawBottom) == "function"
+        and type(SM.new) == "function" and type(SM.enterBet) == "function") then return end
+    local Font = require("src.render.Font")
+    local Sound = require("src.core.Sound")
+    local einsatz = de_text and de_text._BetHowManySlotMachineText
+    local seite1 = einsatz and ohne_ende(einsatz):match("^([^\v\f]-)\v")
+    local alt_new, alt_bet = SM.new, SM.enterBet
+    SM.new = function(...)
+      local self = alt_new(...)
+      if type(self) == "table" then self.dgmEinsatz = seite1 and 0 end
+      return self
+    end
+    SM.enterBet = function(self, ...)
+      local r = alt_bet(self, ...)
+      self.dgmEinsatz = seite1 and 0
+      return r
+    end
+    local function taste(self)
+      local input = self.game.input
+      if input:wasPressed("a") or input:wasPressed("b") then
+        Sound.play(self.game.data, "Press_AB")
+        return true
+      end
+    end
+    local alt_update = SM.update
+    SM.update = function(self, ...)
+      -- NotEnoughCoinsSlotMachineText kehrt mit eigenem Text (betPrompt) ins Menü zurück, ohne Einsatzfrage
+      if self.stage == "bet" and self.dgmEinsatz and not self.betPrompt then
+        self.dgmEinsatz = self.dgmEinsatz + 1
+        if taste(self) then self.dgmEinsatz = nil end
+        return
+      end
+      if self.stage == "message" and self.dgmRest then
+        if self.arrowTimer then self.arrowTimer = self.arrowTimer + 1 end
+        if taste(self) then
+          self.message, self.dgmRest, self.dgmGerollt = self.dgmRest, nil, true
+        end
+        return
+      end
+      local r = alt_update(self, ...)
+      if self.stage == "message" and self.afterMessage == "payout" and not self.dgmGerollt
+          and type(self.message) == "string" then
+        local vorn, rest = self.message:match("^([^\v]-)\v(.*)$")
+        local letzte = vorn and vorn:match("([^\n]*)$")
+        if letzte then self.message, self.dgmRest = vorn, letzte .. "\n" .. rest end
+      elseif self.stage ~= "message" and self.stage ~= "payout" then
+        self.dgmGerollt = nil
+      end
+      return r
+    end
+    local alt_draw = SM.drawBottom
+    SM.drawBottom = function(self, ...)
+      if self.stage == "bet" and self.dgmEinsatz and not self.betPrompt then
+        Font.drawBox(0, 12, 20, 6)
+        love.graphics.setColor(0, 0, 0, 1)
+        local z1, z2 = seite1:match("^([^\n]*)\n?(.*)$")
+        Font.draw(z1, 8, 112)
+        Font.draw(z2, 8, 128)
+        if self.dgmEinsatz % 60 < 30 then Font.drawCode(0xEE, 144, 128) end
+        love.graphics.setColor(1, 1, 1, 1)
+        return
+      end
+      if not (self.dgmGerollt and (self.stage == "message" or self.stage == "payout")) then
+        return alt_draw(self, ...)
+      end
+      local zeichne, fd = love.graphics.draw, Font.draw
+      return ersetzt({
+        { love.graphics, "draw", function(bild, ...)
+          if bild == self.symbolImg then return end
+          return zeichne(bild, ...)
+        end },
+        { Font, "draw", function(text, x, y, ...)
+          if x == 40 and y == 112 then x = 8 end
+          return fd(text, x, y, ...)
+        end },
+      }, alt_draw, self, ...)
+    end
+  end
+
   -- BLITZ: die Gelbe DE-ROM schreibt „{RAM:wNameBuffer}\nsetzt BLITZ ein.“ (_FlashLightsAreaText); im Original steht
   -- dort das Pokémon aus dem Team-Menü (StartMenu_Pokemon kopiert seinen Namen nach wNameBuffer).  Der Port füllt
   -- game.stringBuffer dafür nicht (OverworldController useFlashFieldMove) → vorher den Namen des gewählten Pokémon
@@ -1355,6 +2481,201 @@ return function(mod, MODVERSION)
         return original(self, ...)
       end
     end)
+  end
+
+  -- ================================================================ Haken: Textseiten und Abläufe
+
+  -- Listen mit Frage im Textfenster (Spieler-PC: _WhatToWithdrawText, _WhatToTossText): im Original druckt PrintText
+  -- die Frage, bevor die Liste erscheint, und die DE-ROM setzt dort eine Fortsetzung („Welches Item / möchtest Du ▼
+  -- / mitnehmen?“), an der das Spiel auf A wartet.  Der Port zeigt Liste und die letzten zwei Zeilen sofort
+  -- (ListMenu drawMessageBox) → bei Fragen mit Fortsetzung zuerst die Frage als Textfenster bis zu ihrem Ende, dann
+  -- die Liste.  Nach einer Meldung („TRANK / mitgenommen.“, PlayerPC showCompletion) druckt das Original die Frage
+  -- erneut, während die alte Liste samt Mengenfenster noch steht; neu gezeichnet wird die Liste erst danach → die
+  -- Erneuerung der Zeilen (after) bis zum Ende der Frage zurückhalten
+  local function listenfrage_einhaengen()
+    local ok, LM = pcall(require, "src.ui.ListMenu")
+    if not (ok and type(LM) == "table" and type(LM.new) == "function") then return end
+    local TextBox = require("src.render.TextBox")
+    local original = LM.new
+    LM.new = function(game, title, items, opts, ...)
+      local list = original(game, title, items, opts, ...)
+      local frage = type(opts) == "table" and opts.messageBox and opts.footer
+      if type(list) ~= "table" or type(frage) ~= "string" or not frage:find("\v", 1, true) then return list end
+      local box = TextBox.new(game, frage, nil, { stay = {} })
+      local erneut, zuletzt, gewickelt = false, frage, false
+      local draw, update = list.draw, list.update
+      list.update = function(self, ...)
+        -- showCompletion legt PlayerPC erst nach ListMenu.new an
+        if not gewickelt and type(self.showCompletion) == "function" then
+          gewickelt = true
+          local sc = self.showCompletion
+          self.showCompletion = function(l, text, after, ...)
+            local menge = l.pcQtyBox
+            return sc(l, text, function() l.dgmNachher, l.dgmMenge = after, menge end, ...)
+          end
+        end
+        if self.footer == frage and zuletzt ~= frage then
+          box, erneut = TextBox.new(game, frage, nil, { stay = {} }), true
+        end
+        zuletzt = self.footer
+        if not box then return update(self, ...) end
+        box:update(...)
+        if box.done then
+          box, erneut = nil, false
+          local nachher = self.dgmNachher
+          self.dgmNachher, self.dgmMenge = nil, nil
+          if nachher then nachher() end
+        end
+      end
+      list.draw = function(self, ...)
+        if self.footer ~= frage then zuletzt = self.footer end
+        if not box then return draw(self, ...) end
+        if erneut then
+          draw(self, ...)
+          if self.dgmMenge then self.dgmMenge:draw() end
+        end
+        return box:draw()
+      end
+      return list
+    end
+  end
+
+  -- Texte ohne Buchstabenverzögerung (BIT_NO_TEXT_DELAY; Port: TextBox opts.instant), z. B. am Preisschalter „Wir
+  -- tauschen / Münzen gegen ▼ / Preise ein.“ und „Du möchtest also / ABRA ▼ / haben?“: das Original druckt sie ohne
+  -- Verzögerung, wartet aber an Fortsetzung und Absatz auf A (_ContText bzw. Paragraph → ManualTextScroll).  Der
+  -- Port legt mit instant die letzte Seite fertig hin; die englischen Texte haben dort keine Fortsetzung → Texte mit
+  -- Fortsetzung oder Absatz ohne Buchstabenverzögerung (noLetterDelay), aber mit ihren Wartestellen
+  local function sofort_mit_halt_einhaengen()
+    local TextBox = require("src.render.TextBox")
+    local original = TextBox.new
+    TextBox.new = function(game, text, onDone, opts, ...)
+      if type(opts) == "table" and opts.instant and type(text) == "string" and text:find("[\v\f]") then
+        local neu = {}
+        for k, v in pairs(opts) do neu[k] = v end
+        neu.instant, neu.noLetterDelay = nil, true
+        opts = neu
+      end
+      return original(game, text, onDone, opts, ...)
+    end
+  end
+
+  -- Fahrradladen: BikeShopClerkDoYouLikeItText „Das ist unser / bestes FAHRRAD! ▼ / Möchtest Du es ▼ / haben?“
+  -- bleibt unter dem Kauffenster stehen, so wie das Textfenster nach dem Rollen aussieht (letzte zwei Zeilen).  Der
+  -- Port legt eine Kopie der ganzen letzten Seite seiner Seitenteilung darunter (data/scripts/story2.lua
+  -- BikeShopWindow.new), mit vier Zeilen die ersten beiden → die letzten zwei Zeilen setzen.  Der Cursor ▶ erscheint
+  -- im Original erst mit HandleMenuInput nach dem Text; der Port zeichnet ihn immer → solange das Textfenster des
+  -- Satzes oben liegt, ohne Cursor.
+  local function fahrradladen_einhaengen()
+    local TextBox = require("src.render.TextBox")
+    local Font = require("src.render.Font")
+    local Theme = require("src.ui.Theme")
+    local gepatcht = setmetatable({}, { __mode = "k" })
+    local function ohne_cursor(mt)
+      if gepatcht[mt] or type(mt.draw) ~= "function" then return end
+      gepatcht[mt] = true
+      local draw = mt.draw
+      mt.draw = function(self, ...)
+        if not (self.dgmText and self.game.stack:top() == self.dgmText) then return draw(self, ...) end
+        local dc = Font.drawCode
+        return ersetzt({ { Font, "drawCode", function(code, ...)
+          if code == Theme.cursor then return end
+          return dc(code, ...)
+        end } }, draw, self, ...)
+      end
+    end
+    local original = TextBox.new
+    TextBox.new = function(game, text, ...)
+      local box = original(game, text, ...)
+      local t = type(game) == "table" and game.data and game.data.text
+      local fenster = t and text == t._BikeShopClerkDoYouLikeItText and game.stack and game.stack:top()
+      if type(fenster) == "table" and type(fenster.footer) == "table" and fenster.onChoose then
+        local seite = fenster.footer
+        if #seite > 2 then fenster.footer = { seite[#seite - 1], seite[#seite] } end
+        fenster.dgmText = box
+        if getmetatable(fenster) then ohne_cursor(getmetatable(fenster)) end
+      end
+      return box
+    end
+  end
+
+  -- Texte der Oberwelt (DisplayTextID: Personen, Schilder, Item-Bälle, Karten-Skripte): DisplayTextIDInit lädt erst
+  -- die Schrift (LoadFontTilePatterns, CopyVideoDataDouble mit 8 Kacheln je Frame) und das Fenster
+  -- (CopyScreenTileBufferToVRAM); erst dann beginnt der Text.  An der DE-ROM gemessen (p105_de_probe.py): leerer
+  -- Kasten 19 Frames.  Folgetexte derselben Szene (text_asm, kein CloseTextDisplay dazwischen) laufen ohne diese Pause
+  -- weiter.  Der Port tippt sofort; Texte, die von selbst schließen (Item-Ball nach der Melodie, „EICH: Warte! Geh
+  -- nicht raus!“), sind dadurch früher weg → Texte, die die Oberwelt öffnet (während OverworldState.update), wenn
+  -- seit mindestens 2 Frames kein Textfenster mehr lief, 19 Frames mit leerem Kasten beginnen
+  local SCHRIFT_LADEN = 19
+  local function oberwelttext_einhaengen()
+    local ok, OW = pcall(require, "src.world.OverworldController")
+    if not (ok and type(OW) == "table" and type(OW.update) == "function") then return end
+    local TextBox = require("src.render.TextBox")
+    local in_oberwelt, frame, zuletzt = 0, 0, -10
+    local alt_update = OW.update
+    OW.update = function(...)
+      frame = frame + 1
+      in_oberwelt = in_oberwelt + 1
+      local okr, r = pcall(alt_update, ...)
+      in_oberwelt = in_oberwelt - 1
+      if not okr then error(r, 0) end
+      return r
+    end
+    local alt_new = TextBox.new
+    TextBox.new = function(...)
+      local box = alt_new(...)
+      if in_oberwelt > 0 and frame - zuletzt > 2 and type(box) == "table" then box.dgmVorlauf = SCHRIFT_LADEN end
+      return box
+    end
+    local alt_tb, alt_draw = TextBox.update, TextBox.draw
+    TextBox.update = function(self, ...)
+      zuletzt = frame
+      if (self.dgmVorlauf or 0) > 0 then
+        self.dgmVorlauf = self.dgmVorlauf - 1
+        return
+      end
+      return alt_tb(self, ...)
+    end
+    -- auch eine fertig hingelegte Seite (opts.instant) erscheint erst danach
+    TextBox.draw = function(self, ...)
+      if (self.dgmVorlauf or 0) <= 0 then return alt_draw(self, ...) end
+      return ersetzt({ { self, "shown", {} } }, alt_draw, self, ...)
+    end
+  end
+
+  -- Pokémon-Center: „OK. Wir benötigen / Deine POKéMON.“ endet ohne Tastendruck (done), das Fenster bleibt aber
+  -- stehen, bis nach der Heilmaschine „Danke! …“ es ersetzt (pokecenter.asm: kein CloseTextDisplay dazwischen).  Der
+  -- Port schließt es (TextBox auto) und zeigt die Maschine ohne Text → die fertige Textbox bis finishNurseHeal über
+  -- der Oberwelt weiterzeichnen
+  local function heiltext_einhaengen()
+    local ok, OW = pcall(require, "src.world.OverworldController")
+    if not (ok and type(OW) == "table" and type(OW.drawUI) == "function" and type(OW.finishNurseHeal) == "function")
+    then return end
+    local TextBox = require("src.render.TextBox")
+    local alt_new = TextBox.new
+    TextBox.new = function(game, text, onDone, opts, ...)
+      local t = type(game) == "table" and game.data and game.data.text
+      if not (t and text == t._NeedYourPokemonText and type(opts) == "table" and opts.auto and onDone) then
+        return alt_new(game, text, onDone, opts, ...)
+      end
+      local box
+      local weiter = onDone
+      box = alt_new(game, text, function(...)
+        if game.overworld then game.overworld.dgmStehtext = box end
+        return weiter(...)
+      end, opts, ...)
+      return box
+    end
+    local alt_finish = OW.finishNurseHeal
+    OW.finishNurseHeal = function(self, ...)
+      self.dgmStehtext = nil
+      return alt_finish(self, ...)
+    end
+    local alt_ui = OW.drawUI
+    OW.drawUI = function(self, ...)
+      local r = alt_ui(self, ...)
+      if self.dgmStehtext and (self.healAnim or self.emote) then self.dgmStehtext:draw() end
+      return r
+    end
   end
 
   -- ================================================================ Haken: Bilder
@@ -1560,7 +2881,6 @@ return function(mod, MODVERSION)
     if daten.safarimenue then safari_einhaengen(daten.safarimenue) end
     if daten.lage then lage_einhaengen(daten.lage, rezept) end
     verwaltung_einhaengen()
-    menues_einhaengen()
     -- Namen: Tausch-Spitznamen und Namensvorschläge der DE-ROM (field.trades / field.boot.namePresets)
     local nm = daten.namen
     if nm and Data.field then
@@ -1608,8 +2928,31 @@ return function(mod, MODVERSION)
     end
     automat_zeilen_einhaengen(en_text, daten.text)
     if daten.geist then geist_einhaengen(daten.geist) end
+    if daten.stockwerke then aufzug_einhaengen(daten.stockwerke) end
     blitz_einhaengen(daten.text and daten.text._FlashLightsAreaText)
     automat_verloren_einhaengen(daten.text and daten.text._NotThisTimeText)
+    automat_seiten_einhaengen(daten.text)
+    listenfrage_einhaengen()
+    fahrradladen_einhaengen()
+    sofort_mit_halt_einhaengen()
+    if daten.feldattacken then teammenue_einhaengen(daten.feldattacken) end
+    flugkarte_einhaengen()
+    kampftext_rollen_einhaengen()
+    laden_einhaengen()
+    oberwelttext_einhaengen()
+    heiltext_einhaengen()
+    statusfenster_einhaengen()
+    randfuellung_einhaengen()
+    ruhmeshalle_pc_einhaengen()
+    pokedex_schrei_einhaengen()
+    statusattacke_einhaengen()
+    fangvorfuehrung_einhaengen()
+    pikachu_halten_einhaengen()
+    pikachu_vorn_einhaengen()
+    pikachu_bild_einhaengen(daten.pikaschreie)
+    fanclub_einhaengen()
+    pikachu_laden_einhaengen()
+    og_farben_einhaengen()
     -- Bilder mit deutscher Schrift (Mod-Cache, Assets.resolve; Feldpfade direkt an newImage umgebogen)
     bericht.bilder = G.bilder_einhaengen(bilder, schluessel, { Data.field })
     titel_einhaengen(bilder)
@@ -1619,10 +2962,6 @@ return function(mod, MODVERSION)
   -- ================================================================ Start
 
   function K.start()
-    -- Mod-Option: Start- und Hauptmenü wie im Original (siehe menues_einhaengen)
-    pcall(function()
-      mod.options:define({ { key = "originalmenues", type = "toggle", label = "ORIGINAL-MENÜS", default = true } })
-    end)
     local edition = GameVersion.get()
     local id = IMPORT[edition]
     if not id then return end

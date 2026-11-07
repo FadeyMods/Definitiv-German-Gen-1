@@ -3942,6 +3942,10 @@ return {
   geist = { 15, 28607 },
   -- Statuskürzel SLP/PSN/BRN/FRZ/PAR: fünf Blöcke „3E x 22 3E y 22 36 z C9“ ab Bank/Adresse (PrintStatusAilment)
   status = { 29, 18504 },
+  -- Kürzel für kampfunfähig (PrintStatusCondition: Block „3E x 22 3E y 22 36 z“ ab Bank/Adresse)
+  kampfunfaehig = { 0, 5356 },
+  -- Feldattacken im Team-Menü: FieldMoveDisplayData (Attacke, Namensnummer, linkeste Kachel; Ende $FF)
+  feldattacken = { 1, 30745 },
   -- Namenseingabe: Buchstabentafeln der DE-ROM (groß/klein)
   alphabet = { gross = { 1, 26634 }, klein = { 1, 26573 } },
   -- Namen aus der DE-ROM: Tausch-Spitznamen (TradeMons: Bank, Adresse, Anzahl, Abstand), Namensvorschläge

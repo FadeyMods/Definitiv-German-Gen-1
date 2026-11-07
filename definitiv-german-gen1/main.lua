@@ -9,7 +9,8 @@
 --   zeichen.lua       Zeichensatz der deutschen Editionen (welcher Code welches Zeichen ist)
 --   rezept_<ed>.lua   DE-Adressen der Port-Symbole und weitere Lagen je Edition
 --   zusatz.lua        deutsche Texte für Port-Zusätze ohne Gegenstück in der ROM
-local VERSION = "1.0.4"
+--   intro.lua         Editions-Intro beim Spielstart (video/<ed>.ogv), unter MODS abschaltbar
+local VERSION = "1.0.5"
 
 return function(mod)
   local quelle = mod:read("kern.lua")
@@ -29,4 +30,13 @@ return function(mod)
   if not ok then mod.log:warn("Definitiv German: %s", tostring(fehler)) end
   -- gemeinsam.lua setzt beim Einhängen exports.deutsch = true; die Schnittstelle bleibt die Funktion
   pcall(function() mod.exports.deutsch = deutsch end)
+  -- Editions-Intro beim Spielstart (intro.lua, Videos in video/); ein Fehler dort berührt die Übersetzung nicht
+  local quelleIntro = mod:read("intro.lua")
+  if quelleIntro then
+    local okI, ierr = pcall(function()
+      local intro = assert((loadstring or load)(quelleIntro, "@intro.lua"))
+      intro()(mod)
+    end)
+    if not okI then mod.log:warn("Definitiv German: Intro: %s", tostring(ierr)) end
+  end
 end

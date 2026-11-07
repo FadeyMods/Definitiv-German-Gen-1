@@ -15,8 +15,15 @@ wäre die englische ROM die deutsche.
 - **Deutsche Grafiken**: Titelbild (ROTE / BLAUE / GELBE EDITION), Copyright-Tafeln, Spielautomat,
   Pokédex-Einheiten, Urkunde; Gelb zusätzlich Surf-Minispiel und Drucker
 - **Deutsche Anordnung**: Menüs und Kästen sitzen wie im deutschen Original
-- **Start- und Hauptmenü wie im Original**: Das START-Menü endet mit ZURÜCK, das Hauptmenü hat kein
-  SPIEL BEENDEN (siehe Mod-Option unten)
+- **Abläufe wie im deutschen Original**: Textseiten warten an derselben Stelle auf A, Fenster bleiben so lange
+  stehen wie dort (z. B. beim Heilen im Pokémon-Center, bei Item-Bällen, in der Ruhmeshalle am PC); in Gelb
+  auch das Stimmungsbild beim Ansprechen von PIKACHU, seine Sprünge dabei und seine Stimmungsbilder in den Szenen
+  im Fanclub und in Bills Haus; nach WEITER steht PIKACHU dort, wo es beim Sichern stand, und folgt in den
+  ersten Schritten so wie im Original (auch beim Import und Export von Spielständen)
+- **Kartenrand**: Für die gen1recomp-Option RANDFÜLLUNG gibt es die Wahl ORIGINAL (Randblock der Karte wie im
+  Original); sie ist die Vorgabe, eine schon gewählte Einstellung bleibt
+- **Start- und Hauptmenü mit den Zusätzen von gen1recomp**: im Hauptmenü SPIEL BEENDEN, im START-Menü MODS und
+  BEENDEN (mit der Rückfrage „Zurück zum Hauptmenü?“), deutsch
 - **Zusätze von gen1recomp** wie Optionen, Mod-Verwaltung, Link- und KONNEX-Meldungen auf Deutsch, im Stil der
   deutschen Spiele
 
@@ -51,13 +58,22 @@ wäre die englische ROM die deutsche.
 
 Falls noch der ältere Mod `deutsch-gen1` installiert ist: bitte entfernen, der Launcher meldet sonst einen Konflikt.
 
-## Mod-Verwaltung und Mod-Option
+## Mod-Verwaltung
 
-- Die Mod-Verwaltung öffnest du im Spiel über **OPTION → MODS** (nach EXTRAS), mit **F10** auf der Tastatur oder
-  im Launcher unter **MODS**.
-- **ORIGINAL-MENÜS** (Standard: an): START- und Hauptmenü wie im Original. Zum Titelbild geht es mit
-  A+B+SELECT+START, beendet wird über das Fenster. Wer die Zeilen MODS / BEENDEN / SPIEL BEENDEN von gen1recomp
-  zurück möchte, schaltet die Option in der Mod-Verwaltung unter diesem Mod (**OPTIONEN..**) oder im Launcher aus.
+- Die Mod-Verwaltung öffnest du im Spiel über **MODS** im START-Menü, über **OPTION → MODS** (ganz unten), mit
+  **F10** auf der Tastatur oder im Launcher unter **MODS**.
+
+## Intro beim Start
+
+Beim Spielstart zeigt der Mod ein kurzes Intro der Edition: Das Modul wird eingesteckt, das Gerät geht an, dann
+kommt das Start-Logo. Das Intro endet im ersten Bild des Spiels.
+
+- **Überspringen:** jede Taste, jeder Controller-Knopf, ein Mausklick oder ein Tippen. Der Druck erreicht das Spiel
+  nicht.
+- **Abschalten:** unter **MODS** beim Mod unter **OPTIONEN..**: `INTRO ZEIGEN` schaltet das Intro ab, `INTRO-TON`
+  nur seinen Ton.
+- Die Lautstärke folgt der Effekt-Lautstärke des Spiels, die Spielmusik pausiert so lange. Fehlt ein Video oder
+  lässt es sich nicht abspielen, startet das Spiel ganz normal.
 
 ## Online-Spiel
 
@@ -79,6 +95,17 @@ englisch.
 
 Der Mod enthält **keine Texte oder Grafiken der Spiele**. Er bringt nur Code und „Rezepte“ mit (Positionen in der
 ROM, Prüfsummen). Beim Start liest er deine eigene deutsche ROM und baut daraus alles zusammen.
+
+## Danke an
+
+Für das Intro:
+
+- **3D-Grundformen** (Sketchfab, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); verwendet wird nur die
+  Form, Farben und Aufdrucke sind eigene): memoov, ddn.design und Wikiti (Game Boy Color), yassineCGI (Game Boy
+  Advance), Stoinercraft und Zillious (Game Boy), c4m5ron (Game-Boy-Module), thegraphicsgeek (GBA-Modul)
+- **Licht:** Poly Haven (CC0)
+- **Geräusche:** einige Aufnahmen von Kenney (www.kenney.nl, CC0). Die Musik und alle übrigen Klänge sind selbst
+  komponiert.
 
 Was sich in einer Version geändert hat, steht im jeweiligen
 [Release](https://github.com/FadeyMods/Definitiv-German-Gen-1/releases).
